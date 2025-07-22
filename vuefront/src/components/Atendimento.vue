@@ -14,6 +14,7 @@
       <v-divider></v-divider>
 
       <v-card-text>
+        <!-- Seleção do Funcionário -->
         <v-subheader class="font-weight-bold mt-4">Profissional Responsável pelo Serviço</v-subheader>
         <v-select
           v-model="funcionarioSelecionado"
@@ -28,6 +29,7 @@
           :menu-props="{ maxHeight: '400' }"
         />
 
+        <!-- Seleção de serviços -->
         <v-subheader class="font-weight-bold mt-4">Seleção de Serviços</v-subheader>
         <v-autocomplete
           v-model="servicosSelecionados"
@@ -48,6 +50,7 @@
           no-data-text="Nenhum serviço encontrado"
         />
 
+        <!-- Seleção de produtos -->
         <v-subheader class="font-weight-bold mt-4">Seleção de Produtos</v-subheader>
         <v-select
           v-model="produtosSelecionados"
@@ -63,6 +66,7 @@
           :menu-props="{ maxHeight: '400' }"
         />
 
+        <!-- Data do atendimento -->
         <v-text-field
           v-model="dataAgenda"
           label="Data do Atendimento"
@@ -82,6 +86,7 @@
           Marcar para Hoje
         </v-btn>
 
+        <!-- Observações -->
         <v-textarea
           v-model="observacoesAtendimento"
           label="Observações"
@@ -91,6 +96,7 @@
           class="mt-4"
         />
 
+        <!-- Método de Pagamento -->
         <v-select
           v-model="metodoPagamentoId"
           :items="metodosPagamento"
@@ -104,6 +110,7 @@
           clearable
         />
 
+        <!-- Valor Total -->
         <v-divider class="my-4"></v-divider>
         <v-subheader class="font-weight-bold">Valor Total</v-subheader>
         <div class="display-2 font-weight-bold text-center text-primary">
@@ -138,56 +145,58 @@
     </v-card>
   </v-dialog>
 
-  <!-- Modal de Sucesso -->
-  <v-dialog v-model="showSuccessModal" max-width="600px" @after-leave="closeSuccessModal">
-    <v-card elevation="24" class="pa-6" outlined>
-      <v-card-title class="d-flex justify-center align-center">
-        <v-icon
-          v-if="showSuccessModal"
-          color="green"
-          class="display-2 animated fadeIn"
-          :style="iconStyle"
-        >
-          mdi-check-circle
-        </v-icon>
-      </v-card-title>
-      <v-divider></v-divider>
-      <v-card-text class="text-center">
-        <h2 class="headline">Venda realizada com sucesso!</h2>
-      </v-card-text>
-    </v-card>
-  </v-dialog>
+  <!-- Snackbar para mensagem de sucesso -->
+  <v-snackbar
+    v-model="snackbarVisible"
+    :color="snackbarColor"
+    top
+    right
+    timeout="5000"
+    :style="{ zIndex: 9999 }"
+    :multi-line="true"
+    v-bind:class="{'animated bounceInUp': snackbarVisible}"
+  >
+    <span class="white--text font-weight-bold">{{ snackbarMessage }}</span>
+    <v-btn
+      color="white"
+      text
+      @click="snackbarVisible = false"
+    >
+      Fechar
+    </v-btn>
+  </v-snackbar>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, watch } from 'vue';
-import axios from 'axios';
+import { defineComponent, ref, watch } from 'vue'
+import axios from 'axios'
+import gsap from 'gsap'
 
 interface Servico {
-  id: number;
-  nome: string;
-  preco: number;
+  id: number
+  nome: string
+  preco: number
 }
 
 interface Produto {
-  id: number;
-  nome: string;
-  precoVenda: number;
+  id: number
+  nome: string
+  precoVenda: number
 }
 
 interface MetodoPagamento {
-  id: number;
-  tipo: string;
+  id: number
+  tipo: string
 }
 
 interface Cliente {
-  id: number;
-  nome: string;
+  id: number
+  nome: string
 }
 
 interface Funcionario {
-  id: number;
-  nome: string;
+  id: number
+  nome: string
 }
 
 export default defineComponent({
@@ -195,180 +204,189 @@ export default defineComponent({
   props: {
     modelValue: {
       type: Boolean,
-      required: true,
+      required: true
     },
     cliente: {
       type: Object as () => Cliente | null,
-      default: null,
-    },
+      default: null
+    }
   },
   emits: ['update:modelValue', 'finalizado'],
   setup(props, { emit }) {
-    const servicos = ref<Servico[]>([]);
-    const servicosSelecionados = ref<Servico[]>([]);
-    const produtos = ref<Produto[]>([]);
-    const produtosSelecionados = ref<Produto[]>([]);
-    const funcionarios = ref<Funcionario[]>([]);
-    const funcionarioSelecionado = ref<Funcionario | null>(null);
-    const observacoesAtendimento = ref('');
-    const dataAgenda = ref<string | null>(null);
-    const valorTotal = ref<number | string>(0);
-    const metodoPagamentoId = ref<number | null>(null);
-    const metodosPagamento = ref<MetodoPagamento[]>([]);
-    const showSuccessModal = ref(false);
-    const iconStyle = ref({ animation: 'fadeIn 1s' });
+    const servicos = ref<Servico[]>([])
+    const servicosSelecionados = ref<Servico[]>([])
+    const produtos = ref<Produto[]>([])
+    const produtosSelecionados = ref<Produto[]>([])
+    const funcionarios = ref<Funcionario[]>([])
+    const funcionarioSelecionado = ref<Funcionario | null>(null)
+    const observacoesAtendimento = ref('')
+    const dataAgenda = ref<string | null>(null)
+    const valorTotal = ref<number | string>(0)
+    const metodoPagamentoId = ref<number | null>(null)
+    const metodosPagamento = ref<MetodoPagamento[]>([])
 
-    const searchQuery = ref('');
+    const searchQuery = ref('')
+    const snackbarVisible = ref(false)
+    const snackbarMessage = ref('')
+    const snackbarColor = ref('success')
 
     const carregarFuncionarios = async () => {
       try {
-        const { data } = await axios.get('/funcionarios');
-        funcionarios.value = data;
+        const { data } = await axios.get('/funcionarios')
+        funcionarios.value = data
       } catch (e) {
-        console.error(e);
-        alert('Erro ao buscar funcionários.');
+        console.error(e)
+        alert('Erro ao buscar funcionários.')
       }
-    };
+    }
 
     const carregarServicos = async () => {
       try {
-        const { data } = await axios.get('/todos-servicos');
-        servicos.value = data;
+        const { data } = await axios.get('/todos-servicos')
+        servicos.value = data
       } catch (e) {
-        console.error(e);
-        alert('Erro ao buscar serviços.');
+        console.error(e)
+        alert('Erro ao buscar serviços.')
       }
-    };
+    }
 
     const carregarProdutos = async () => {
       try {
-        const { data } = await axios.get('/todos-produtos');
-        produtos.value = data;
+        const { data } = await axios.get('/todos-produtos')
+        produtos.value = data
       } catch (e) {
-        console.error(e);
-        alert('Erro ao buscar produtos.');
+        console.error(e)
+        alert('Erro ao buscar produtos.')
       }
-    };
+    }
 
     const carregarMetodosPagamento = async () => {
       try {
-        const { data } = await axios.get('/todos-pagamento');
-        metodosPagamento.value = data;
+        const { data } = await axios.get('/todos-pagamento')
+        metodosPagamento.value = data
       } catch (e) {
-        console.error(e);
-        alert('Erro ao carregar métodos de pagamento.');
+        console.error(e)
+        alert('Erro ao carregar métodos de pagamento.')
       }
-    };
+    }
 
     watch(() => props.modelValue, (novo) => {
       if (novo) {
-        servicosSelecionados.value = [];
-        produtosSelecionados.value = [];
-        observacoesAtendimento.value = '';
-        dataAgenda.value = null;
-        metodoPagamentoId.value = null;
-        valorTotal.value = 0;
-        carregarFuncionarios();
-        carregarServicos();
-        carregarProdutos();
-        carregarMetodosPagamento();
+        servicosSelecionados.value = []
+        produtosSelecionados.value = []
+        observacoesAtendimento.value = ''
+        dataAgenda.value = null
+        metodoPagamentoId.value = null
+        valorTotal.value = 0
+        carregarFuncionarios()
+        carregarServicos()
+        carregarProdutos()
+        carregarMetodosPagamento()
       }
-    });
+    })
 
     watch([servicosSelecionados, produtosSelecionados], () => {
-      calcularValorTotal();
-    });
+      calcularValorTotal()
+    })
 
     const calcularValorTotal = () => {
-      let total = 0;
-      servicosSelecionados.value.forEach((servico) => {
-        total += Number(servico.preco);
-      });
-      produtosSelecionados.value.forEach((produto) => {
-        total += Number(produto.precoVenda);
-      });
-      valorTotal.value = total;
-    };
+      let total = 0
+
+      servicosSelecionados.value.forEach(servico => {
+        total += Number(servico.preco)
+      })
+
+      produtosSelecionados.value.forEach(produto => {
+        total += Number(produto.precoVenda)
+      })
+
+      valorTotal.value = total
+    }
 
     const formatarValor = (valor: number) => {
-      return `${valor.toFixed(2)} Kz`;
-    };
+      return `${valor.toFixed(2)} Kz`
+    }
 
     const fechar = () => {
-      emit('update:modelValue', false);
-      servicosSelecionados.value = [];
-      produtosSelecionados.value = [];
-      observacoesAtendimento.value = '';
-      dataAgenda.value = null;
-      metodoPagamentoId.value = null;
-      valorTotal.value = 0;
-    };
+      emit('update:modelValue', false)
+      servicosSelecionados.value = []
+      produtosSelecionados.value = []
+      observacoesAtendimento.value = ''
+      dataAgenda.value = null
+      metodoPagamentoId.value = null
+      valorTotal.value = 0
+    }
 
     const finalizarAtendimento = async () => {
       if (!props.cliente || (servicosSelecionados.value.length === 0 && produtosSelecionados.value.length === 0))
-        return alert('Selecione ao menos um serviço ou produto.');
+        return alert('Selecione ao menos um serviço ou produto.')
 
       try {
         const resp = await axios.post('/registra-venda-avulsa', {
           clienteId: props.cliente.id,
           funcionarioId: funcionarioSelecionado.value?.id || null,
-          servicos: servicosSelecionados.value.map((s) => ({ id: s.id, preco: s.preco.toString() })),
-          produtos: produtosSelecionados.value.map((p) => ({ id: p.id, preco: p.precoVenda.toString() })),
+          servicos: servicosSelecionados.value.map(s => ({ id: s.id, preco: s.preco.toString() })),
+          produtos: produtosSelecionados.value.map(p => ({ id: p.id, preco: p.precoVenda.toString() })),
           observacoes: observacoesAtendimento.value || '',
           dataVenda: dataAgenda.value,
-          metodoPagamentoId: metodoPagamentoId.value,
-        });
-        alert(resp.data.mensagem || 'Venda registrada!');
-        showSuccessModal.value = true;
-        setTimeout(() => {
-          showSuccessModal.value = false;
-        }, 3000);
-        fechar();
-        emit('finalizado');
+          metodoPagamentoId: metodoPagamentoId.value
+        })
+        snackbarMessage.value = resp.data.mensagem || 'Venda registrada!'
+        snackbarColor.value = 'success'
+        snackbarVisible.value = true
+        gsap.fromTo(".v-snackbar", { opacity: 0 }, { opacity: 1, duration: 1 });
+        fechar()
+        emit('finalizado')
       } catch (e: any) {
-        console.error('Erro ao registrar venda:', e);
-        alert(`Erro ao registrar venda: ${e.response?.data?.erro || e.message || e}`);
+        console.error('Erro ao registrar venda:', e)
+        snackbarMessage.value = `Erro ao registrar venda: ${e.response?.data?.erro || e.message || e}`
+        snackbarColor.value = 'error'
+        snackbarVisible.value = true
+        gsap.fromTo(".v-snackbar", { opacity: 0 }, { opacity: 1, duration: 1 });
       }
-    };
+    }
 
     const agendarClienteExistente = async () => {
       if (!props.cliente || !dataAgenda.value)
-        return alert('Selecione uma data para o agendamento.');
+        return alert('Selecione uma data para o agendamento.')
 
       try {
         await axios.post('/agendar-cliente-existente', {
           clienteId: props.cliente.id,
           dataAgendamento: dataAgenda.value,
           observacoes: observacoesAtendimento.value,
-          servicosIds: servicosSelecionados.value.map((s) => s.id),
-          produtosAgendados: produtosSelecionados.value.map((p) => ({
+          servicosIds: servicosSelecionados.value.map(s => s.id),
+          produtosAgendados: produtosSelecionados.value.map(p => ({
             id: p.id,
-            quantidade: 1,
+            quantidade: 1
           })),
           metodoPagamentoId: metodoPagamentoId.value,
-          funcionarioId: funcionarioSelecionado.value?.id || null,
-        });
-        alert('Cliente agendado com sucesso!');
-        fechar();
+          funcionarioId: funcionarioSelecionado.value?.id || null
+        })
+        snackbarMessage.value = 'Cliente agendado com sucesso!'
+        snackbarColor.value = 'success'
+        snackbarVisible.value = true
+        gsap.fromTo(".v-snackbar", { opacity: 0 }, { opacity: 1, duration: 1 });
+        fechar()
       } catch (e) {
-        console.error(e);
-        alert('Erro ao agendar cliente.');
+        console.error(e)
+        snackbarMessage.value = 'Erro ao agendar cliente.'
+        snackbarColor.value = 'error'
+        snackbarVisible.value = true
+        gsap.fromTo(".v-snackbar", { opacity: 0 }, { opacity: 1, duration: 1 });
       }
-    };
+    }
 
     const marcarHoje = () => {
-      const hoje = new Date().toISOString().split('T')[0];
-      dataAgenda.value = hoje;
-    };
+      const hoje = new Date().toISOString().split('T')[0]
+      dataAgenda.value = hoje
+    }
 
+    // Filtro para o serviço
     const filterServices = (item: Servico, query: string) => {
-      if (!query) return true;
-      return item.nome.toLowerCase().includes(query.toLowerCase());
-    };
-
-    const closeSuccessModal = () => {
-      showSuccessModal.value = false;
-    };
+      if (!query) return true
+      return item.nome.toLowerCase().includes(query.toLowerCase())
+    }
 
     return {
       servicos,
@@ -389,29 +407,37 @@ export default defineComponent({
       fechar,
       marcarHoje,
       formatarValor,
-      showSuccessModal,
       filterServices,
-      iconStyle,
-      closeSuccessModal,
-    };
-  },
-});
+      snackbarVisible,
+      snackbarMessage,
+      snackbarColor
+    }
+  }
+})
 </script>
 
 <style scoped>
-/* Estilos para o componente de sucesso */
-@keyframes fadeIn {
-  0% {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
+/* Personalização da animação GSAP */
+.animated {
+  animation-duration: 1s;
+  animation-timing-function: ease-in-out;
 }
 
-.animated {
-  animation: fadeIn 1s ease-in-out;
+.bounceInUp {
+  animation-name: bounceInUp;
+}
+
+@keyframes bounceInUp {
+  0% {
+    transform: translateY(2000px);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(-30px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 </style>
