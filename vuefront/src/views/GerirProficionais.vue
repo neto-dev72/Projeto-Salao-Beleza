@@ -1,6 +1,6 @@
 <template>
   <v-container class="py-10">
-    <!-- Hero Image (Background) -->
+    <!-- Hero Image -->
     <div class="hero-bg">
       <v-container class="d-flex justify-center align-center" style="height: 200px;">
         <v-row class="fill-height">
@@ -11,7 +11,7 @@
               class="rounded-lg elevation-14 image-primary"
               lazy-src="@/assets/img/home-img2.jpg"
               cover
-            ></v-img>
+            />
           </v-col>
           <v-col cols="12" md="6" class="text-center text-md-left px-12">
             <h1 class="display-2 font-weight-bold mb-6 hero-title">
@@ -52,7 +52,6 @@
           <v-btn color="info" @click="verHistorico(item)" size="small" icon class="mr-2" title="Ver histórico">
             <v-icon>mdi-file-document-outline</v-icon>
           </v-btn>
-
           <v-btn color="error" @click="excluirFuncionario(item.id)" size="small" icon title="Excluir funcionário">
             <v-icon>mdi-delete</v-icon>
           </v-btn>
@@ -82,6 +81,7 @@
       :historico="historico"
       :totalGanho="totalGanho"
       :servicoMaisRealizado="servicoMaisRealizado"
+      :rankingServicos="rankingServicos"
       :kzGanho="kzGanho"
       @fechar="mostrarHistorico = false"
     />
@@ -117,7 +117,8 @@ export default defineComponent({
     const historico = ref<any[]>([])
     const totalGanho = ref(0)
     const servicoMaisRealizado = ref('')
-    const kzGanho = ref<number | null>(null) // Novo ref para o ganho em Kz
+    const rankingServicos = ref<any[]>([]) // Novo: array com { nome, quantidade }
+    const kzGanho = ref<number | null>(null)
 
     const headers = [
       { text: 'Nome', value: 'nome' },
@@ -143,7 +144,8 @@ export default defineComponent({
         historico.value = data.historico
         totalGanho.value = data.totalGanho
         servicoMaisRealizado.value = data.servicoMaisRealizado
-        kzGanho.value = data.kzGanho // Armazenando o ganho em Kz
+        rankingServicos.value = data.rankingServicos || []
+        kzGanho.value = data.kzGanho || null
         funcionarioSelecionado.value = funcionario
         mostrarHistorico.value = true
       } catch (e) {
@@ -189,6 +191,7 @@ export default defineComponent({
       historico,
       totalGanho,
       servicoMaisRealizado,
+      rankingServicos,
       kzGanho,
       headers,
       verHistorico,
@@ -209,15 +212,6 @@ export default defineComponent({
   min-height: 40vh;
   display: flex;
   align-items: center;
-}
-
-.hero-section {
-  min-height: 40vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding-top: 0;
-  padding-bottom: 0;
 }
 
 .image-primary {

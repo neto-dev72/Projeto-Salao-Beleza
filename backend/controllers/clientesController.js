@@ -540,7 +540,6 @@ router.post('/agendar-cliente', auth, async (req, res) => {
 
 
 
-
 router.post('/agendamentos/:id/finalizar', auth, async (req, res) => {
   const { id } = req.params;
   const t = await Vendas.sequelize.transaction(); // Inicia a transação
@@ -640,7 +639,7 @@ router.post('/agendamentos/:id/finalizar', auth, async (req, res) => {
       });
     }
 
-    // 5. Cria a venda
+    // 5. Cria a venda (🚨 LINHA MODIFICADA: adicionamos AgendamentoId)
     const novaVenda = await Vendas.create({
       clienteId: agendamento.ClienteId,
       dataVenda: new Date(),
@@ -648,7 +647,8 @@ router.post('/agendamentos/:id/finalizar', auth, async (req, res) => {
       observacoes: agendamento.observacoes || '',
       UsuarioId: usuarioId,
       SalaoId,
-      MetodoPagamentoId: agendamento.MetodoPagamentoId || null
+      MetodoPagamentoId: agendamento.MetodoPagamentoId || null,
+      AgendamentoId: agendamento.id // ← Aqui preenchemos o campo corretamente!
     }, { transaction: t });
 
     // 6. Relaciona serviços e registra FuncionarioId
@@ -657,7 +657,7 @@ router.post('/agendamentos/:id/finalizar', auth, async (req, res) => {
         VendaId: novaVenda.id,
         ServicoId: item.ServicoId,
         preco: item.preco,
-        FuncionarioId: item.FuncionarioId, // Registrando o FuncionarioId
+        FuncionarioId: item.FuncionarioId,
         SalaoId
       }, { transaction: t });
     }
@@ -689,6 +689,108 @@ router.post('/agendamentos/:id/finalizar', auth, async (req, res) => {
     await t.rollback();
     console.error('Erro ao finalizar atendimento:', err);
     res.status(500).json({ erro: 'Erro ao finalizar atendimento', detalhes: err.message });
+  }
+});
+
+
+
+router.get('/agendamentos/:id/recibo', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Busca o usuário autenticado
+    const usuario = await Usuario.findByPk(req.usuario.id);
+    if (!usuario) {
+      return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    }
+
+    const SalaoId = usuario.SalaoId;
+
+    // Busca dados do salão
+    const salao = await Salao.findByPk(SalaoId, {
+      attributes: ['nome', 'endereco', 'telefone']
+    });
+
+    // 1. Busca o agendamento
+    const agendamento = await Agendamento.findByPk(id);
+    if (!agendamento) {
+      return res.status(404).json({ erro: 'Agendamento não encontrado' });
+    }
+
+    if (!agendamento.finalizado) {
+      return res.status(400).json({ erro: 'Agendamento ainda não foi finalizado' });
+    }
+
+    // 2. Busca a venda vinculada ao agendamento
+    const venda = await Vendas.findOne({
+      where: { AgendamentoId: id }
+    });
+
+    if (!venda) {
+      return res.status(404).json({ erro: 'Venda não encontrada para este agendamento' });
+    }
+
+    // 3. Busca cliente da venda
+    const cliente = await Clientes.findByPk(venda.clienteId);
+
+    // 4. Busca serviços associados à venda
+    const vendaServicos = await VendaServico.findAll({
+      where: { VendaId: venda.id }
+    });
+
+    const servicosFormatados = await Promise.all(
+      vendaServicos.map(async (vs) => {
+        const servico = await Servico.findByPk(vs.ServicoId);
+        const funcionario = vs.FuncionarioId ? await Funcionarios.findByPk(vs.FuncionarioId) : null;
+
+        return {
+          nome: servico ? servico.nome : 'Serviço removido',
+          preco: servico ? servico.preco : 0,
+          funcionario: funcionario ? { nome: funcionario.nome, funcao: funcionario.funcao } : null
+        };
+      })
+    );
+
+    // 5. Busca produtos associados à venda
+    const vendaProdutos = await VendaProduto.findAll({
+      where: { VendaId: venda.id }
+    });
+
+    const produtosFormatados = await Promise.all(
+      vendaProdutos.map(async (vp) => {
+        const produto = await Produtos.findByPk(vp.ProdutoId);
+        return {
+          nome: produto ? produto.nome : 'Produto removido',
+          preco: produto ? produto.precoVenda : 0,
+          quantidade: vp.quantidade ?? 0
+        };
+      })
+    );
+
+    // 6. Método de pagamento
+    const metodoPagamento = venda.MetodoPagamentoId
+      ? await MetodoPagamento.findByPk(venda.MetodoPagamentoId)
+      : null;
+
+    // 7. Monta resposta final com salão incluído
+    const resposta = {
+      venda,
+      cliente,
+      salao: salao ? {
+        nome: salao.nome,
+        endereco: salao.endereco,
+        telefone: salao.telefone
+      } : null,
+      servicos: servicosFormatados,
+      produtos: produtosFormatados,
+      metodoPagamento: metodoPagamento ? metodoPagamento.tipo : 'Não informado'
+    };
+
+    res.json(resposta);
+
+  } catch (err) {
+    console.error('Erro ao buscar recibo:', err);
+    res.status(500).json({ erro: 'Erro ao buscar recibo', detalhes: err.message });
   }
 });
 
@@ -1291,81 +1393,114 @@ router.post('/cadastrar-funcionarios', auth, async (req, res) => {
 
 
 
-
-
-
-
-
-
-// Rota para obter o histórico de um funcionário (somente serviços)
 router.get('/funcionarios/:id/historico', async (req, res) => {
   try {
-    const { id } = req.params; // ID do funcionário
+    const { id } = req.params;
 
-    // Buscar o funcionário no banco
+    // Verifica se o funcionário existe
     const funcionario = await Funcionarios.findByPk(id);
     if (!funcionario) {
       return res.status(404).json({ erro: 'Funcionário não encontrado.' });
     }
 
-    // Obter as vendas de serviços associadas ao funcionário
-    const vendas = await VendaServico.findAll({
-      where: { FuncionarioId: id }
+    // Busca as vendas de serviços realizadas pelo funcionário, com serviço, venda e método de pagamento (sem cliente)
+    const vendasServicos = await VendaServico.findAll({
+      where: { FuncionarioId: id },
+      include: [
+        {
+          model: Servico,
+          attributes: ['id', 'nome', 'preco']
+        },
+        {
+          model: Vendas,
+          attributes: ['id', 'clienteId', 'MetodoPagamentoId'],
+          include: [
+            {
+              model: MetodoPagamento,
+              attributes: ['tipo']
+            }
+          ]
+        }
+      ]
     });
 
-    // Se não houver vendas, retorna um histórico vazio
-    if (vendas.length === 0) {
+    if (vendasServicos.length === 0) {
       return res.status(200).json({
         historico: [],
         totalGanho: 0,
-        servicoMaisRealizado: null
+        servicoMaisRealizado: null,
+        rankingServicos: []
       });
     }
 
-    // Buscar todos os serviços
-    const servicos = await Servico.findAll();
+    // Para pegar os clientes, vamos buscar separadamente por clienteId
+    // Primeiro coletamos todos os clienteIds únicos das vendas
+    const clienteIds = [...new Set(vendasServicos.map(vs => vs.Venda?.clienteId).filter(Boolean))];
 
-    // Calcular o total ganho e montar o histórico detalhado
+    // Busca todos os clientes de uma vez só
+    const clientes = await Clientes.findAll({
+      where: { id: clienteIds },
+      attributes: ['id', 'nome']
+    });
+
+    // Cria um mapa clienteId -> nome para consulta rápida
+    const mapaClientes = {};
+    clientes.forEach(cliente => {
+      mapaClientes[cliente.id] = cliente.nome;
+    });
+
+    // Agora processa o histórico, total, contagem etc
     let totalGanho = 0;
-    const servicosRealizados = [];
+    const historico = [];
+    const contadorServicos = {};
 
-    const historico = vendas.map(venda => {
-      const servico = servicos.find(s => s.id === venda.ServicoId);
+    for (const vs of vendasServicos) {
+      const servico = vs.Servico;
+      const venda = vs.Venda;
+      const metodo = venda?.MetodoPagamento;
+      const clienteNome = venda ? (mapaClientes[venda.clienteId] || 'Desconhecido') : 'Desconhecido';
 
-      if (!servico) {
-        // Caso algum serviço não seja encontrado, ignora essa venda
-        return null;
-      }
+      if (!servico) continue;
 
-      servicosRealizados.push(servico.nome);
       totalGanho += parseFloat(servico.preco);
 
-      return {
-        data: venda.createdAt,
+      if (!contadorServicos[servico.nome]) {
+        contadorServicos[servico.nome] = 0;
+      }
+      contadorServicos[servico.nome]++;
+
+      historico.push({
+        data: vs.createdAt,
         servicoNome: servico.nome,
-        valor: parseFloat(servico.preco)
-      };
-    }).filter(Boolean); // Remove itens null
+        valor: parseFloat(servico.preco),
+        clienteNome,
+        metodoPagamento: metodo?.tipo || 'Indefinido'
+      });
+    }
 
-    // Determinar o serviço mais realizado
-    const servicoMaisRealizado = servicosRealizados.length > 0
-      ? servicosRealizados
-          .sort((a, b) =>
-            servicosRealizados.filter(v => v === a).length - servicosRealizados.filter(v => v === b).length
-          )
-          .pop()
-      : null;
+    let servicoMaisRealizado = null;
+    let maiorQtd = 0;
+    for (const nome in contadorServicos) {
+      if (contadorServicos[nome] > maiorQtd) {
+        maiorQtd = contadorServicos[nome];
+        servicoMaisRealizado = nome;
+      }
+    }
 
-    // Retornar o histórico com o total ganho e o serviço mais realizado
-    res.status(200).json({
+    const rankingServicos = Object.entries(contadorServicos)
+      .map(([nome, quantidade]) => ({ nome, quantidade }))
+      .sort((a, b) => b.quantidade - a.quantidade);
+
+    return res.status(200).json({
       historico,
       totalGanho,
-      servicoMaisRealizado
+      servicoMaisRealizado,
+      rankingServicos
     });
 
   } catch (err) {
     console.error('Erro ao buscar histórico do funcionário:', err);
-    res.status(500).json({ erro: 'Falha ao buscar histórico do funcionário.' });
+    return res.status(500).json({ erro: 'Falha ao buscar histórico do funcionário.' });
   }
 });
 

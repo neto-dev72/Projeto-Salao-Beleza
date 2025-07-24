@@ -145,32 +145,26 @@
     </v-card>
   </v-dialog>
 
-  <!-- Snackbar para mensagem de sucesso -->
-  <v-snackbar
-    v-model="snackbarVisible"
-    :color="snackbarColor"
-    top
-    right
-    timeout="5000"
-    :style="{ zIndex: 9999 }"
-    :multi-line="true"
-    v-bind:class="{'animated bounceInUp': snackbarVisible}"
-  >
-    <span class="white--text font-weight-bold">{{ snackbarMessage }}</span>
-    <v-btn
-      color="white"
-      text
-      @click="snackbarVisible = false"
-    >
-      Fechar
-    </v-btn>
-  </v-snackbar>
+  <!-- Modal de sucesso adicionado -->
+  <v-dialog v-model="modalSucesso" max-width="400" persistent>
+    <v-card class="pa-6" outlined>
+      <v-card-text class="text-center">
+        <v-icon color="green" size="72">mdi-check-circle</v-icon>
+        <h3 class="headline font-weight-bold mt-4">Sucesso!</h3>
+        <p class="subtitle-1 mt-2">Operação realizada com sucesso. Muito obrigado por confiar no nosso serviço!</p>
+      </v-card-text>
+      <v-card-actions class="justify-center">
+        <v-btn color="green" dark rounded @click="modalSucesso = false">
+          Fechar
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script lang="ts">
 import { defineComponent, ref, watch } from 'vue'
 import axios from 'axios'
-import gsap from 'gsap'
 
 interface Servico {
   id: number
@@ -226,9 +220,9 @@ export default defineComponent({
     const metodosPagamento = ref<MetodoPagamento[]>([])
 
     const searchQuery = ref('')
-    const snackbarVisible = ref(false)
-    const snackbarMessage = ref('')
-    const snackbarColor = ref('success')
+
+    // Novo estado para controlar o modal de sucesso
+    const modalSucesso = ref(false)
 
     const carregarFuncionarios = async () => {
       try {
@@ -331,18 +325,13 @@ export default defineComponent({
           dataVenda: dataAgenda.value,
           metodoPagamentoId: metodoPagamentoId.value
         })
-        snackbarMessage.value = resp.data.mensagem || 'Venda registrada!'
-        snackbarColor.value = 'success'
-        snackbarVisible.value = true
-        gsap.fromTo(".v-snackbar", { opacity: 0 }, { opacity: 1, duration: 1 });
+        // Mostrar modal de sucesso
+        modalSucesso.value = true
         fechar()
         emit('finalizado')
       } catch (e: any) {
         console.error('Erro ao registrar venda:', e)
-        snackbarMessage.value = `Erro ao registrar venda: ${e.response?.data?.erro || e.message || e}`
-        snackbarColor.value = 'error'
-        snackbarVisible.value = true
-        gsap.fromTo(".v-snackbar", { opacity: 0 }, { opacity: 1, duration: 1 });
+        alert(`Erro ao registrar venda: ${e.response?.data?.erro || e.message || e}`)
       }
     }
 
@@ -363,17 +352,12 @@ export default defineComponent({
           metodoPagamentoId: metodoPagamentoId.value,
           funcionarioId: funcionarioSelecionado.value?.id || null
         })
-        snackbarMessage.value = 'Cliente agendado com sucesso!'
-        snackbarColor.value = 'success'
-        snackbarVisible.value = true
-        gsap.fromTo(".v-snackbar", { opacity: 0 }, { opacity: 1, duration: 1 });
+        // Mostrar modal de sucesso
+        modalSucesso.value = true
         fechar()
       } catch (e) {
         console.error(e)
-        snackbarMessage.value = 'Erro ao agendar cliente.'
-        snackbarColor.value = 'error'
-        snackbarVisible.value = true
-        gsap.fromTo(".v-snackbar", { opacity: 0 }, { opacity: 1, duration: 1 });
+        alert('Erro ao agendar cliente.')
       }
     }
 
@@ -408,36 +392,14 @@ export default defineComponent({
       marcarHoje,
       formatarValor,
       filterServices,
-      snackbarVisible,
-      snackbarMessage,
-      snackbarColor
+
+      // Modal sucesso
+      modalSucesso
     }
   }
 })
 </script>
 
 <style scoped>
-/* Personalização da animação GSAP */
-.animated {
-  animation-duration: 1s;
-  animation-timing-function: ease-in-out;
-}
-
-.bounceInUp {
-  animation-name: bounceInUp;
-}
-
-@keyframes bounceInUp {
-  0% {
-    transform: translateY(2000px);
-    opacity: 0;
-  }
-  60% {
-    transform: translateY(-30px);
-  }
-  100% {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
+/* ...seu estilo... */
 </style>

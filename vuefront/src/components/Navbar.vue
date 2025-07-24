@@ -6,7 +6,7 @@
     elevate-on-scroll
     flat
   >
-    <!-- Ícone hambúrguer com toggle -->
+    <!-- Ícone hambúrguer -->
     <v-app-bar-nav-icon class="d-md-none toggler" @click="drawer = !drawer">
       <v-icon>{{ drawer ? 'mdi-close' : 'mdi-menu' }}</v-icon>
     </v-app-bar-nav-icon>
@@ -18,7 +18,21 @@
 
     <v-spacer />
 
-    <!-- Menu horizontal para telas maiores -->
+    <!-- Botão principal: Atender Cliente -->
+    <v-btn
+      v-if="isLoggedIn"
+      class="btn-acao-principal d-none d-md-flex"
+      color="#FF5722"
+      size="large"
+      rounded
+      elevation="10"
+      @click="navigateTo('/gerir-clientes')"
+    >
+      <v-icon start>mdi-account-plus</v-icon>
+      Atender Cliente
+    </v-btn>
+
+    <!-- Menu horizontal -->
     <template v-for="item in menus" :key="item.title">
       <v-btn
         v-if="!item.submenus"
@@ -27,7 +41,6 @@
         @click="navigateTo(item.route)"
       >
         <v-icon left>
-          <!-- Ícone especial para Produtos: carrinho -->
           {{ item.title === 'De Produtos' || item.title === 'Produtos' ? 'mdi-cart' : item.icon }}
         </v-icon>
         {{ item.title }}
@@ -56,26 +69,25 @@
         </template>
         <v-list>
           <v-list-item
-            v-for="subitem in item.submenus"
-            :key="subitem.title"
-            @click="navigateTo(subitem.route)"
+            v-for="sub in item.submenus"
+            :key="sub.title"
+            @click="navigateTo(sub.route)"
             link
           >
             <v-list-item-icon>
               <v-icon>
-                <!-- Ícone especial para produtos dentro do submenu: carrinho -->
-                {{ subitem.title === 'De Produtos' || subitem.title === 'Produtos' ? 'mdi-cart' : subitem.icon }}
+                {{ sub.title === 'De Produtos' || sub.title === 'Produtos' ? 'mdi-cart' : sub.icon }}
               </v-icon>
             </v-list-item-icon>
             <v-list-item-content>
-              <v-list-item-title>{{ subitem.title }}</v-list-item-title>
+              <v-list-item-title>{{ sub.title }}</v-list-item-title>
             </v-list-item-content>
           </v-list-item>
         </v-list>
       </v-menu>
     </template>
 
-    <!-- Botão Terminar Sessão, com ícone trocado -->
+    <!-- Logout -->
     <v-btn
       v-if="isLoggedIn"
       text
@@ -87,7 +99,7 @@
     </v-btn>
   </v-app-bar>
 
-  <!-- Drawer lateral -->
+  <!-- Drawer mobile -->
   <v-navigation-drawer
     v-model="drawer"
     app
@@ -95,6 +107,39 @@
     class="d-md-none sidebar"
   >
     <v-list dense nav>
+
+      <!-- Botão "Atender Cliente" no mobile -->
+      <v-list-item
+        v-if="isLoggedIn"
+        class="btn-acao-principal-mobile mt-4 mb-2"
+        @click="navigateTo('/nova-venda')"
+        link
+      >
+        <v-list-item-icon>
+          <v-icon class="text-white">mdi-account-plus</v-icon>
+        </v-list-item-icon>
+        <v-list-item-content>
+          <v-list-item-title class="text-white font-weight-bold">
+            Atender Cliente
+          </v-list-item-title>
+        </v-list-item-content>
+      </v-list-item>
+
+      <!-- Botão direto no drawer -->
+      <v-list-item
+        v-if="isLoggedIn"
+        @click="navigateTo('/gerir-clientes')"
+        link
+      >
+        <v-list-item-icon>
+          <v-icon>mdi-account-multiple</v-icon>
+        </v-list-item-icon>
+        <v-list-item-content>
+          <v-list-item-title>Gestão de Clientes</v-list-item-title>
+        </v-list-item-content>
+      </v-list-item>
+
+      <!-- Menus -->
       <template v-for="item in menus" :key="item.title">
         <v-list-group
           v-if="item.submenus"
@@ -123,7 +168,6 @@
           >
             <v-list-item-icon>
               <v-icon>
-                <!-- Ícone carrinho para produtos no drawer -->
                 {{ sub.title === 'De Produtos' || sub.title === 'Produtos' ? 'mdi-cart' : sub.icon }}
               </v-icon>
             </v-list-item-icon>
@@ -137,7 +181,6 @@
           v-else
           @click="navigateTo(item.route)"
           link
-          class="d-flex align-center justify-space-between"
         >
           <v-list-item-icon>
             <v-icon>
@@ -158,7 +201,6 @@
 
       <v-divider class="my-2"></v-divider>
 
-      <!-- Botão Terminar Sessão com ícone trocado no drawer -->
       <v-list-item v-if="isLoggedIn" @click="logout" link>
         <v-list-item-icon>
           <v-icon>mdi-exit-to-app</v-icon>
@@ -170,6 +212,8 @@
     </v-list>
   </v-navigation-drawer>
 </template>
+
+
 
 <script lang="ts">
 import { defineComponent, ref, computed, watch, onMounted, onUnmounted, reactive } from "vue";
@@ -206,8 +250,10 @@ export default defineComponent({
         ];
         return;
       }
+
       switch (usuario.funcao) {
         case "admin":
+        case "recepcionista":
           menus.value = [
             { title: "Home", route: "/", icon: "mdi-home" },
             { title: "Resumo", route: "/resumo-dash", icon: "mdi-view-dashboard" },
@@ -224,39 +270,12 @@ export default defineComponent({
             },
             {
               title: "Relatórios",
-              route: "",
               icon: "mdi-file-chart",
               submenus: [
                 { title: "Relatório de Vendas", route: "/gerar-relatorio", icon: "mdi-cash-register" },
                 { title: "Relatório de Funcionários", route: "/desempenho-funcionarios", icon: "mdi-account-tie" },
                 { title: "Relatório de Clientes", route: "/relatorio-clientes", icon: "mdi-account-multiple" },
                 { title: "Painel Analítico", route: "/painel-analitico", icon: "mdi-chart-box-outline" },
-              ],
-            },
-            { title: "Despesas", route: "/cadastro-despesa", icon: "mdi-cash-minus" },
-            { title: "Agendamentos", route: "/gerir-agendamentos", icon: "mdi-calendar-check" },
-            { title: "Perfil", route: "/meu-perfil", icon: "mdi-account" },
-          ];
-          break;
-        case "recepcionista":
-          menus.value = [
-            { title: "Home", route: "/", icon: "mdi-home" },
-            { title: "Resumo", route: "/resumo-dash", icon: "mdi-view-dashboard" },
-            {
-              title: "Gestão De",
-              icon: "mdi-folder-settings",
-              submenus: [
-                { title: "Clientes", route: "/gerir-clientes", icon: "mdi-account-multiple" },
-                { title: "Produtos", route: "/gestao-produtos", icon: "mdi-cart" },
-                { title: "Serviços", route: "/cadastro-servico", icon: "mdi-scissors-cutting" },
-              ],
-            },
-            {
-              title: "Relatório De",
-              icon: "mdi-file-chart",
-              submenus: [
-                { title: "De Clientes", route: "/relatorio-clientes", icon: "mdi-account-multiple" },
-                { title: "De Venda", route: "/gerar-relatorio", icon: "mdi-cash-register" },
               ],
             },
             { title: "Despesas", route: "/cadastro-despesa", icon: "mdi-cash-minus" },
@@ -317,14 +336,13 @@ export default defineComponent({
     );
 
     const navigateTo = (route: string) => {
+      if (!route) return;
       router.push(route);
       drawer.value = false;
     };
 
     const logout = async () => {
-      await axios
-        .get("/logout")
-        .catch(() => console.warn("Erro ao deslogar"));
+      await axios.get("/logout").catch(() => console.warn("Erro ao deslogar"));
       localStorage.removeItem("token");
       token.value = null;
       navigateTo("/login");
@@ -335,7 +353,6 @@ export default defineComponent({
 
     onMounted(() => {
       window.addEventListener("scroll", onScroll);
-      fetchAgendamentosCount();
     });
     onUnmounted(() => {
       window.removeEventListener("scroll", onScroll);
@@ -345,20 +362,63 @@ export default defineComponent({
     return {
       logo,
       menus,
-      isLoggedIn,
-      agendamentosCount,
       drawer,
       expanded,
+      isLoggedIn,
+      agendamentosCount,
       isScrolled,
       navigateTo,
       logout,
     };
   },
 });
+
 </script>
 
 
 <style scoped>
+
+/* Botão principal (desktop) */
+.btn-acao-principal {
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background-color: #7B1E3B !important;
+  color: #FFFFFF !important;
+  padding: 10px 24px;
+  border-radius: 30px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(123, 30, 59, 0.4);
+}
+
+.btn-acao-principal:hover {
+  background-color: #6A1B2B !important;
+  transform: scale(1.04);
+}
+
+/* Botão principal (mobile - dentro do drawer) */
+.btn-acao-principal-mobile {
+  background-color: #7B1E3B !important;
+  border-radius: 10px;
+  margin: 12px 16px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: start;
+  transition: all 0.3s ease;
+}
+
+.btn-acao-principal-mobile:hover {
+  background-color: #6A1B2B !important;
+  transform: scale(1.02);
+}
+
+.btn-acao-principal-mobile .v-icon,
+.btn-acao-principal-mobile .v-list-item-title {
+  color: #FFFFFF !important;
+}
+
+
 .navbar {
   background-color: rgba(248, 187, 208, 0.7);
   transition: 0.3s ease;

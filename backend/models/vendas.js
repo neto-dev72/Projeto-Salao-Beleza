@@ -2,6 +2,7 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
 const MetodoPagamento = require("./metodopagamento")
+const Agendamento = require("./agendamento")
 
 const Usuarios  = require("./usuarios")
 
@@ -41,5 +42,8 @@ const Salao = require("./salao")
 Salao.hasMany(Venda);
 Venda.belongsTo(Salao);
 
+
+Agendamento.hasMany(Venda);
+Venda.belongsTo(Agendamento);
 
 module.exports = Venda;
