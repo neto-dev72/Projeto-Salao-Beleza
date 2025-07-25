@@ -10,10 +10,19 @@ const app = express();
 const PORT = process.env.PORT || 9000;
 
 
+const allowedOrigins = [ 'http://localhost:8080', 'https://seu-frontend.onrender.com' ];
+
 app.use(cors({
-    origin: 'http://localhost:8080', // endereço do seu front
-    credentials: true // Permite envio de cookies/sessões
-  }));
+  origin: function(origin, callback){
+    if(!origin) return callback(null, true);
+    if(allowedOrigins.indexOf(origin) === -1){
+      var msg = 'O CORS não permite acesso deste domínio.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
 
 
 app.use(bodyParser.json());
