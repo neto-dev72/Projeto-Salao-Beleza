@@ -1510,253 +1510,167 @@ router.get('/funcionarios/:id/historico', async (req, res) => {
 
 
 
+const { fn, col, where } = require('sequelize');
 
 
+const moment = require('moment');
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// Rota para gerar o relatório de clientes
-router.get('/relatorio/clientes', async (req, res) => {
-  const { periodo, inicio, fim, clientes } = req.query;
-
-  console.log(req.query);
-
+router.post('/relatorio-clientes', async (req, res) => {
   try {
-    // Filtrar clientes selecionados
-    const clientesSelecionados = await Clientes.findAll({
-      where: {
-        id: clientes.split(','),
-      },
-    });
+    const { clientesIds, periodo } = req.body;
 
-    // Preparar intervalo de datas
-    const dataInicio = inicio ? new Date(inicio) : new Date();
-    const dataFim = fim ? new Date(fim) : new Date();
+    console.log('Requisição recebida:', req.body);
 
-    // Buscar todas as vendas no período solicitado
-    const vendas = await Vendas.findAll({
-      where: {
-        clienteId: clientesSelecionados.map(cliente => cliente.id),
-        dataVenda: {
-          [Op.between]: [dataInicio, dataFim],
-        },
-      },
-    });
-
-    // Buscar todos os produtos e serviços consumidos no período
-    const vendaProdutos = await VendaProduto.findAll({
-      where: {
-        VendaId: vendas.map(venda => venda.id),
-      },
-    });
-
-    const vendaServicos = await VendaServico.findAll({
-      where: {
-        VendaId: vendas.map(venda => venda.id),
-      },
-    });
-
-    // Buscar os detalhes dos produtos e serviços
-    const produtos = await Produtos.findAll({
-      where: {
-        id: vendaProdutos.map(vendaProduto => vendaProduto.ProdutoId),
-      },
-    });
-
-    const servicos = await Servico.findAll({
-      where: {
-        id: vendaServicos.map(vendaServico => vendaServico.ServicoId),
-      },
-    });
-
-    // Buscar os detalhes dos funcionários
-    const funcionarios = await Funcionarios.findAll({
-      where: {
-        id: vendaServicos.map(vendaServico => vendaServico.FuncionarioId),
-      },
-    });
-
-    // Processar os dados para cada cliente
-    const dadosRelatorio = clientesSelecionados.map(cliente => {
-      // Filtra as vendas que pertencem ao cliente
-      const vendasCliente = vendas.filter(venda => venda.clienteId === cliente.id);
-
-      // Calcular o total comprado
-      const totalComprado = vendasCliente.reduce((total, venda) => total + parseFloat(venda.valorTotal), 0);
-
-      // Identificar a última compra (venda mais recente)
-      const ultimaCompra = vendasCliente.reduce((maisRecente, venda) => {
-        return new Date(venda.dataVenda) > new Date(maisRecente.dataVenda) ? venda : maisRecente;
-      }, vendasCliente[0]);
-
-      // Identificar a data do último atendimento (última venda)
-      const ultimaVenda = vendasCliente.reduce((maisRecente, venda) => {
-        return new Date(venda.createdAt) > new Date(maisRecente.createdAt) ? venda : maisRecente;
-      }, vendasCliente[0]);
-
-      // Obter os produtos consumidos
-      const produtosConsumidos = vendaProdutos.filter(vendaProduto => vendaProduto.VendaId === ultimaCompra.id)
-        .map(vendaProduto => produtos.find(produto => produto.id === vendaProduto.ProdutoId).nome);
-
-      // Obter os serviços consumidos e identificar o funcionário
-      const servicosConsumidos = vendaServicos.filter(vendaServico => vendaServico.VendaId === ultimaCompra.id)
-        .map(vendaServico => {
-          // Buscar o serviço
-          const servico = servicos.find(s => s.id === vendaServico.ServicoId);
-          
-          // Buscar o nome do funcionário que fez o serviço
-          const funcionario = funcionarios.find(f => f.id === vendaServico.FuncionarioId);
-          
-          return `${servico.nome} efetuado por ${funcionario ? funcionario.nome : 'Desconhecido'}`;
-        });
-
-      // Retornar os dados processados para o cliente
-      return {
-        nome: cliente.nome,
-        totalComprado: totalComprado.toFixed(2),
-        ultimaCompra: ultimaCompra ? parseFloat(ultimaCompra.valorTotal).toFixed(2) : '0.00',
-        dataUltimoAtendimento: ultimaVenda ? new Date(ultimaVenda.createdAt).toISOString().slice(0, 10) : 'N/A',
-        produtosConsumidos: produtosConsumidos.join(', '), // Lista dos produtos comprados
-        servicosConsumidos: servicosConsumidos.join(', '), // Lista dos serviços consumidos com o nome do funcionário
-      };
-    });
-
-    // Retornar dados para o frontend
-    res.json(dadosRelatorio);
-  } catch (error) {
-    console.error('Erro ao gerar o relatório de clientes:', error);
-    res.status(500).json({ message: 'Erro ao gerar o relatório' });
-  }
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-const Sequelize = require("sequelize")
-
-
-// Rota para gerar relatório de funcionários
-router.get('/relatorio/funcionarios-rota', auth, async (req, res) => {
-  try {
-    const { periodo, inicio, fim, funcionarios } = req.query;
-
-    // Verifica se ao menos um funcionário foi selecionado
-    if (!funcionarios || funcionarios.length === 0) {
-      return res.status(400).json({ erro: 'Nenhum funcionário selecionado.' });
+    if (!Array.isArray(clientesIds) || clientesIds.length === 0) {
+      return res.status(400).json({ erro: 'Lista de clientes inválida' });
     }
 
-    const usuario = await Usuario.findByPk(req.usuario.id);
-    if (!usuario) {
-      return res.status(404).json({ erro: 'Usuário não encontrado.' });
-    }
+    const getDateRange = (periodo) => {
+      const hoje = moment().startOf('day');
+      let start, end;
 
-    const SalaoId = usuario.SalaoId;
-
-    // Criação da data final com horário configurado
-    const dataFim = new Date(fim);
-    dataFim.setHours(23, 59, 59, 999); // Final do dia
-
-    // Criação da data de início com horário configurado
-    const dataInicio = new Date(inicio);
-    dataInicio.setHours(0, 0, 0, 0); // Início do dia
-
-    // Monta o filtro para a consulta de vendas e serviços
-    const whereConditions = {
-      SalaoId,
-      FuncionarioId: funcionarios.split(',').map(id => parseInt(id)), // Filtra pelos funcionários selecionados
-      createdAt: {
-        [Op.between]: [dataInicio, dataFim] // Filtra pelo período
+      switch (periodo) {
+        case 'hoje':
+          start = hoje.clone();
+          end = hoje.clone();
+          break;
+        case 'semana':
+          start = hoje.clone().startOf('isoWeek');
+          end = hoje.clone().endOf('isoWeek');
+          break;
+        case 'mes':
+          start = hoje.clone().startOf('month');
+          end = hoje.clone().endOf('month');
+          break;
+        case 'trimestre':
+          start = hoje.clone().startOf('quarter');
+          end = hoje.clone().endOf('quarter');
+          break;
+        case 'ano':
+          start = hoje.clone().startOf('year');
+          end = hoje.clone().endOf('year');
+          break;
+        default:
+          return null;
       }
+
+      return {
+        start: start.format('YYYY-MM-DD'),
+        end: end.format('YYYY-MM-DD'),
+      };
     };
 
-    // Consulta agregada para contar atendimentos e calcular a receita total
-    const relatorio = await VendaServico.findAll({
-      attributes: [
-        [Sequelize.fn('COUNT', Sequelize.col('id')), 'totalAtendimentos'],
-        [Sequelize.fn('SUM', Sequelize.col('valor')), 'receitaTotal'],
-        'FuncionarioId'
-      ],
-      where: whereConditions,
-      group: ['FuncionarioId'], // Agrupar por funcionário
-      raw: true,
-    });
+    const dateRange = getDateRange(periodo);
 
-    // Se não houver dados, enviar uma resposta apropriada
-    if (relatorio.length === 0) {
-      return res.status(404).json({ erro: 'Nenhum atendimento encontrado para os critérios fornecidos.' });
+    if (dateRange) {
+      console.log('Filtro por período:', periodo);
+      console.log('Data início:', dateRange.start);
+      console.log('Data fim:', dateRange.end);
+    } else {
+      console.log('Sem filtro por período');
     }
 
-    // Buscar os dados dos funcionários (nomes) manualmente após a consulta
-    const funcionarioIds = relatorio.map(item => item.FuncionarioId);
-    const funcionariosData = await Funcionarios.findAll({
-      where: {
-        id: funcionarioIds
-      },
+    const clientes = await Clientes.findAll({
+      where: { id: { [Op.in]: clientesIds } },
       attributes: ['id', 'nome'],
       raw: true,
     });
 
-    // Criar um mapa de Funcionarios para facilitar a associação pelo ID
-    const funcionariosMap = funcionariosData.reduce((acc, func) => {
-      acc[func.id] = func.nome;
-      return acc;
-    }, {});
+    if (clientes.length === 0) {
+      return res.json({ resultados: [] });
+    }
 
-    // Formata os resultados para exibir o nome do funcionário junto com as métricas
-    const resultado = relatorio.map(item => ({
-      nome: funcionariosMap[item.FuncionarioId], // Recupera o nome do funcionário do mapa
-      totalAtendimentos: parseInt(item.totalAtendimentos), // Assegura que é um número
-      receitaTotal: parseFloat(item.receitaTotal), // Assegura que é um número
-      status: 'Ativo', // Pode adicionar lógica para status de funcionários
-    }));
+    const clienteIdsEncontrados = clientes.map(c => c.id);
 
-    console.log("relatorio gerado: ", resultado);
+    // Buscar serviços vendidos
+    const servicosVendidos = await VendaServico.findAll({
+      include: [
+        {
+          model: Servico,
+          attributes: ['preco'],
+        },
+        {
+          model: Vendas,
+          as: 'Venda',
+          attributes: ['clienteId', 'createdAt'],
+          where: {
+            clienteId: { [Op.in]: clienteIdsEncontrados },
+            ...(dateRange ? {
+              createdAt: {
+                [Op.between]: [dateRange.start + ' 00:00:00', dateRange.end + ' 23:59:59']
+              }
+            } : {})
+          }
+        }
+      ],
+      raw: true,
+      nest: true,
+    });
 
-    res.json(resultado);
+    const totalServicosPorCliente = {};
+    servicosVendidos.forEach(item => {
+      const clienteId = item.Venda.clienteId;
+      const precoServico = parseFloat(item.Servico.preco || 0);
+      if (!totalServicosPorCliente[clienteId]) totalServicosPorCliente[clienteId] = 0;
+      totalServicosPorCliente[clienteId] += precoServico;
+    });
+
+    // Buscar produtos vendidos
+    const produtosVendidos = await VendaProduto.findAll({
+      include: [
+        {
+          model: Produtos,
+          attributes: ['precoVenda'],
+        },
+        {
+          model: Vendas,
+          as: 'Venda',
+          attributes: ['clienteId', 'createdAt'],
+          where: {
+            clienteId: { [Op.in]: clienteIdsEncontrados },
+            ...(dateRange ? {
+              createdAt: {
+                [Op.between]: [dateRange.start + ' 00:00:00', dateRange.end + ' 23:59:59']
+              }
+            } : {})
+          }
+        }
+      ],
+      raw: true,
+      nest: true,
+    });
+
+    const totalProdutosPorCliente = {};
+    produtosVendidos.forEach(item => {
+      const clienteId = item.Venda.clienteId;
+      // Corrigido para item.Produtos.precoVenda (plural)
+      const precoProduto = parseFloat(item.Produtos.precoVenda || 0);
+      if (!totalProdutosPorCliente[clienteId]) totalProdutosPorCliente[clienteId] = 0;
+      totalProdutosPorCliente[clienteId] += precoProduto;
+    });
+
+    const resultado = clientes.map(c => {
+      const servicos = totalServicosPorCliente[c.id] || 0;
+      const produtos = totalProdutosPorCliente[c.id] || 0;
+      return {
+        clienteId: c.id,
+        nome: c.nome,
+        totalServicos: servicos.toFixed(2),
+        totalProdutos: produtos.toFixed(2),
+      };
+    });
+
+    return res.json({ resultados: resultado });
+
   } catch (err) {
-    console.error('Erro ao gerar relatório de funcionários:', err);
-    res.status(500).json({ erro: 'Falha ao gerar relatório de funcionários.' });
+    console.error('❌ Erro ao buscar relatório de clientes:', err);
+    return res.status(500).json({ erro: 'Erro ao gerar relatório' });
   }
 });
+
+module.exports = router;
+
 
 
 

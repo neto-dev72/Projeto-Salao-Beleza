@@ -105,10 +105,19 @@
       </v-form>
     </v-card-text>
 
-    <v-snackbar v-model="snackbar" :timeout="4000" color="green" location="top right">
-      Cliente salvo com sucesso!
+    <!-- Snackbar de Sucesso -->
+    <v-snackbar v-model="snackbarSucesso" :timeout="4000" color="green" location="top right">
+      {{ mensagemSucesso }}
       <template #actions>
-        <v-btn variant="text" @click="snackbar = false">Fechar</v-btn>
+        <v-btn variant="text" @click="snackbarSucesso = false">Fechar</v-btn>
+      </template>
+    </v-snackbar>
+
+    <!-- Snackbar de Erro -->
+    <v-snackbar v-model="snackbarErro" :timeout="5000" color="red" location="top right">
+      {{ mensagemErro }}
+      <template #actions>
+        <v-btn variant="text" @click="snackbarErro = false">Fechar</v-btn>
       </template>
     </v-snackbar>
 
@@ -143,6 +152,7 @@ function isValidDate(value: string): boolean {
   const date = new Date(value)
   return !isNaN(date.getTime())
 }
+
 function formatToDateOnly(value: string): string {
   return new Date(value).toISOString().split('T')[0]
 }
@@ -150,7 +160,7 @@ function formatToDateOnly(value: string): string {
 interface Cliente {
   nome: string
   telefone: string
-  email: string | null  // Email agora é opcional
+  email: string | null
   dataNascimento: string | null
   localidade: string
   metodoPagamentoId?: number | null
@@ -162,18 +172,23 @@ export default defineComponent({
     const cliente = ref<Cliente>({
       nome: '',
       telefone: '',
-      email: null,  // Valor inicial como null
+      email: null,
       dataNascimento: '',
       localidade: '',
       metodoPagamentoId: null,
     })
+
     const metodosPagamento = ref<{ id: number; tipo: string; detalhes?: string }[]>([])
-    const snackbar = ref(false)
     const focusedField = ref('')
     const dialogMetodoPagamento = ref(false)
     const novoMetodo = ref<{ tipo: string; detalhes: string }>({ tipo: '', detalhes: '' })
     const loadingMetodo = ref(false)
     const form = ref<HTMLFormElement | null>(null)
+
+    const snackbarSucesso = ref(false)
+    const snackbarErro = ref(false)
+    const mensagemSucesso = ref('')
+    const mensagemErro = ref('')
 
     onMounted(async () => {
       await carregarMetodosPagamento()
@@ -184,7 +199,8 @@ export default defineComponent({
         const res = await axios.get('/todos-pagamento')
         metodosPagamento.value = res.data
       } catch {
-        alert('Erro ao carregar métodos de pagamento.')
+        mensagemErro.value = 'Erro ao carregar métodos de pagamento.'
+        snackbarErro.value = true
       }
     }
 
@@ -200,8 +216,11 @@ export default defineComponent({
         cliente.value.metodoPagamentoId = res.data.id
         dialogMetodoPagamento.value = false
         novoMetodo.value = { tipo: '', detalhes: '' }
+        mensagemSucesso.value = 'Método de pagamento cadastrado com sucesso!'
+        snackbarSucesso.value = true
       } catch {
-        alert('Erro ao cadastrar método de pagamento.')
+        mensagemErro.value = 'Erro ao cadastrar método de pagamento.'
+        snackbarErro.value = true
       } finally {
         loadingMetodo.value = false
       }
@@ -214,32 +233,38 @@ export default defineComponent({
 
         await axios.post('/cadastrar-clientes', payload)
 
-        snackbar.value = true
+        mensagemSucesso.value = 'Cliente salvo com sucesso!'
+        snackbarSucesso.value = true
+
         form.value?.reset()
         cliente.value = {
           nome: '',
           telefone: '',
-          email: null,  // Resetando email para null
+          email: null,
           dataNascimento: '',
           localidade: '',
           metodoPagamentoId: null,
         }
       } catch {
-        alert('Erro ao salvar cliente.')
+        mensagemErro.value = 'Erro ao salvar cliente.'
+        snackbarErro.value = true
       }
     }
 
     return {
       cliente,
       metodosPagamento,
-      snackbar,
       focusedField,
       dialogMetodoPagamento,
       novoMetodo,
       loadingMetodo,
+      snackbarSucesso,
+      snackbarErro,
+      mensagemSucesso,
+      mensagemErro,
+      form,
       cadastrarMetodoPagamento,
       submeterFormulario,
-      form,
     }
   },
 })

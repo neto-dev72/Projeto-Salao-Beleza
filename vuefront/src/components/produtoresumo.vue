@@ -47,42 +47,66 @@
       </v-col>
 
       <!-- Alerta Estoque Baixo -->
-      <v-col
-        cols="12"
-        sm="4"
-        md="4"
-        lg="4"
-        class="mb-6"
-        v-if="alertaEstoqueBaixo.length"
-      >
-        <v-card elevation="4" class="pa-6 pink-light-bg rounded-lg">
-          <div class="d-flex justify-space-between align-center mb-4">
-            <h3 class="text-h6 font-weight-bold primary-title">
-              ⚠️ Produtos com Estoque Baixo
-            </h3>
-            <v-chip
-              color="pink lighten-3"
-              text-color="pink darken-2"
-              small
-              >{{ alertaEstoqueBaixo.length }}</v-chip
+      <v-col cols="12" sm="4" md="4" lg="4" v-if="alertaEstoqueBaixo.length">
+        <v-card
+          elevation="12"
+          :color="temEsgotados ? 'deep-purple darken-4' : 'red darken-4'"
+          rounded
+          class="pa-6 d-flex flex-column"
+        >
+          <div class="d-flex align-center mb-4">
+            <v-avatar
+              size="48"
+              :color="temEsgotados ? 'deep-purple accent-4' : 'red accent-4'"
+              class="mr-3"
             >
+              <v-icon size="32" color="white">mdi-alert-circle</v-icon>
+            </v-avatar>
+            <div>
+              <h3 class="text-h5 font-extrabold white--text mb-1">
+                ⚠️ Estoque Baixo - Atenção!
+              </h3>
+              <p class="white--text opacity-75 text-subtitle2 mb-0">
+                {{ alertaEstoqueBaixo.length }} produtos em risco de faltar,
+                sendo {{ esgotadosCount }} esgotados
+              </p>
+            </div>
           </div>
-          <v-list dense two-line>
+
+          <v-divider class="mb-4" :color="temEsgotados ? 'deep-purple accent-3' : 'red accent-3'" />
+
+          <v-list
+            dense
+            class="overflow-y-auto"
+            style="max-height: 240px;"
+          >
             <v-list-item
               v-for="produto in alertaEstoqueBaixo"
               :key="produto.id"
-              class="border-bottom"
+              class="mb-3 rounded-lg"
+              color="red lighten-5"
+              elevation="2"
             >
               <v-list-item-content>
-                <v-list-item-title class="font-weight-bold">
+                <v-list-item-title class="font-bold" :class="produto.quantidadeEstoque === 0 ? 'deep-purple lighten-2 white--text' : 'red lighten-1'">
                   {{ produto.nome }}
                 </v-list-item-title>
-                <v-list-item-subtitle>
-                  Estoque: {{ produto.quantidadeEstoque }}
+                <v-list-item-subtitle class="font-medium white--text opacity-80">
+                  Estoque: <span class="text-h6 font-extrabold">{{ produto.quantidadeEstoque }}</span>
                 </v-list-item-subtitle>
               </v-list-item-content>
-              <v-chip color="pink lighten-4" text-color="pink darken-2" small>
-                <v-icon left small>mdi-alert-circle</v-icon> Baixo
+              <v-chip
+                class="ma-0"
+                :color="produto.quantidadeEstoque === 0 ? 'deep-purple accent-4' : 'red accent-3'"
+                text-color="white"
+                size="small"
+                pill
+                elevation="6"
+              >
+                <v-icon left small>
+                  {{ produto.quantidadeEstoque === 0 ? 'mdi-close-circle' : 'mdi-alert' }}
+                </v-icon>
+                {{ produto.quantidadeEstoque === 0 ? 'ESGOTADO' : 'URGENTE' }}
               </v-chip>
             </v-list-item>
           </v-list>
@@ -316,6 +340,16 @@ const calcPercentReceitaProdutos = computed(() =>
 )
 const calcPercentReceitaServicos = computed(() =>
   (receitaTotalServicos.value / totalReceita.value) * 100
+)
+
+// Computed para contar quantos produtos estão esgotados (estoque === 0)
+const esgotadosCount = computed(() =>
+  alertaEstoqueBaixo.value.filter(p => p.quantidadeEstoque === 0).length
+)
+
+// Computed para saber se há algum produto esgotado
+const temEsgotados = computed(() =>
+  alertaEstoqueBaixo.value.some(p => p.quantidadeEstoque === 0)
 )
 
 const fetchResumoProdutos = async () => {
