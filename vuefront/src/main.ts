@@ -10,8 +10,10 @@ loadFonts()
 // ✅ 2. Configura o Axios antes de montar a aplicação
 import axios from 'axios'
 
-
 axios.defaults.baseURL = 'https://www.bernet-estetica.online/api/'
+axios.defaults.withCredentials = true
+
+
 
 // ✅ Intercepta todas as requisições para enviar o token JWT
 axios.interceptors.request.use(config => {
