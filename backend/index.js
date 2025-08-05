@@ -9,8 +9,17 @@ const sequelize = require('./config/database');
 const app = express();
 const PORT = process.env.PORT || 9000;
 
+
+
+
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://31.97.115.4:8080'], // inclui o IP da VPS
+  origin: [
+  'http://localhost:8080',
+  'http://31.97.115.4:8080',
+  'http://www.bernet-estetica.online',
+  'http://bernet-estetica.online'
+],
+ // inclui o IP da VPS
   credentials: true
 }));
 
