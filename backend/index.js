@@ -11,9 +11,9 @@ const PORT = process.env.PORT || 9000;
 
 
 
-
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://31.97.115.4:8080'], // inclui o IP da VPS
+  origin: ['https://www.bernet-estetica.online', 'http://localhost:8080'],
+
   credentials: true
 }));
 
@@ -29,11 +29,12 @@ app.use(session({
   secret: 'seuSegredoAqui',
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    secure: false,         // true só se for HTTPS
-    httpOnly: true,
-    sameSite: 'lax'        // ou 'none' se usar HTTPS + domínios diferentes
-  }
+ cookie: {
+  secure: true,
+  httpOnly: true,
+  sameSite: 'none'
+}
+
 }));
 
 
