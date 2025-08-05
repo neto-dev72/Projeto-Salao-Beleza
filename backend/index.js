@@ -67,13 +67,11 @@ const Funcionario = require("./models/Funcionarios");
 
 const UsuarioController = require("./controllers/usuarioController")
 
-const GestaoController = require("./controllers/usuarioController")
-
 const clientesoController = require("./controllers/clientesController")
 
 
 app.use("/usuarios", UsuarioController);
-app.use("/gestao", GestaoController);
+
 app.use("/clientes", clientesoController);
 
 
