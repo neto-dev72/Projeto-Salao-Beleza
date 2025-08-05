@@ -10,10 +10,13 @@ const app = express();
 const PORT = process.env.PORT || 9000;
 
 
+
+
 app.use(cors({
-  origin: 'https://www.bernet-estetica.online',
+  origin: ['http://localhost:8080', 'http://31.97.115.4:8080'], // inclui o IP da VPS
   credentials: true
 }));
+
 
 
 
@@ -106,30 +109,16 @@ app.get('/logout', (req, res) => {
 });
 
 
-
-
-
-
-const https  = require("https") ;
-const  fs = require('fs');
-const  path = require('path');
-
-// Caminhos dos certificados SSL (ajuste se estiver diferente na sua VPS)
-const privateKey = fs.readFileSync('/etc/letsencrypt/live/bernet-estetica.online/privkey.pem', 'utf8');
-const certificate = fs.readFileSync('/etc/letsencrypt/live/bernet-estetica.online/fullchain.pem', 'utf8');
-const credentials = { key: privateKey, cert: certificate };
-
-// Inicializa conexão com o banco e sobe o servidor HTTPS
+// Inicializa conexão com o banco e sobe o servidor
 (async () => {
   try {
     await sequelize.authenticate();
     console.log('✅ Conectado ao banco de dados com sucesso.');
     await sequelize.sync({ force: false });
 
-    // Inicia servidor HTTPS
-    https.createServer(credentials, app).listen(PORT, () => {
-      console.log(`🚀 Servidor HTTPS rodando em https://bernet-estetica.online:${PORT}`);
-    });
+   app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Servidor rodando em http://0.0.0.0:${PORT}`);
+});
 
   } catch (err) {
     console.error('❌ Erro ao conectar ao banco de dados:', err);
