@@ -178,6 +178,7 @@ const JWT_SECRET = 'berna12890i'; // substitua por algo seguro
 
 // POST /login - Faz login e retorna token JWT
 router.post('/login', async (req, res) => {
+  console.log('Recebi login com:', req.body);
   const { email, senha } = req.body;
 
   try {
