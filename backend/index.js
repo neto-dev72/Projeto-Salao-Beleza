@@ -29,12 +29,11 @@ app.use(session({
   secret: 'seuSegredoAqui',
   resave: false,
   saveUninitialized: false,
- cookie: {
-  secure: true,
-  httpOnly: true,
-  sameSite: 'none'
-}
-
+  cookie: {
+    secure: false,         // true só se for HTTPS
+    httpOnly: true,
+    sameSite: 'lax'        // ou 'none' se usar HTTPS + domínios diferentes
+  }
 }));
 
 
@@ -67,15 +66,13 @@ const Funcionario = require("./models/Funcionarios");
 
 
 const UsuarioController = require("./controllers/usuarioController")
+app.use("/", UsuarioController);
 
 const GestaoController = require("./controllers/usuarioController")
+app.use("/", GestaoController);
 
 const clientesoController = require("./controllers/clientesController")
-
-app.use("/api", UsuarioController);
-app.use("/api", GestaoController);
-app.use("/api", clientesoController);
-
+app.use("/", clientesoController);
 
 
 
