@@ -121,7 +121,7 @@ export default defineComponent({
       erro.value = '';
       carregando.value = true;
       try {
-        const { data } = await axios.post('/usuarios/login', credenciais.value);
+        const { data } = await axios.post('/login', credenciais.value);
         localStorage.setItem('token', data.token);
         localStorage.setItem('usuario', JSON.stringify(data.usuario));
         window.location.reload(); // mantém seu comportamento
