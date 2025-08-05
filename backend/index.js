@@ -11,9 +11,9 @@ const PORT = process.env.PORT || 9000;
 
 
 
-app.use(cors({
-  origin: ['https://www.bernet-estetica.online', 'http://localhost:8080'],
 
+app.use(cors({
+  origin: ['http://localhost:8080', 'http://31.97.115.4:8080'], // inclui o IP da VPS
   credentials: true
 }));
 
@@ -64,15 +64,17 @@ const Funcionario = require("./models/Funcionarios");
 
 
 
-
 const UsuarioController = require("./controllers/usuarioController")
+app.use("/", UsuarioController);
+
+
+const GestaoController = require("./controllers/usuarioController")
+app.use("/", GestaoController);
+
+
 
 const clientesoController = require("./controllers/clientesController")
-
-
-app.use("/usuarios", UsuarioController);
-
-app.use("/clientes", clientesoController);
+app.use("/",clientesoController);
 
 
 
