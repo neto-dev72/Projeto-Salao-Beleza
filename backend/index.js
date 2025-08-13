@@ -27,19 +27,6 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-const session = require('express-session');
-
-app.use(session({
-  secret: 'seuSegredoAqui',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false,         // true só se for HTTPS
-    httpOnly: true,
-    sameSite: 'lax'        // ou 'none' se usar HTTPS + domínios diferentes
-  }
-}));
-
 
 // Rota simples de teste
 app.get('/', (req, res) => {
