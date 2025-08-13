@@ -10,12 +10,16 @@ const app = express();
 const PORT = process.env.PORT || 9000;
 
 
-
-
 app.use(cors({
-  origin: ['http://localhost:8080', 'http://31.97.115.4:8080'], // inclui o IP da VPS
+  origin: [
+    'http://localhost:8080',
+    'http://31.97.115.4:8080',
+    'https://bernet-estetica.online',
+    'https://www.bernet-estetica.online'
+  ],
   credentials: true
 }));
+
 
 
 
