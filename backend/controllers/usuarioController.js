@@ -2438,6 +2438,32 @@ router.get('/todos-servicos', auth, async (req, res) => {
 
 
 
+router.get('/todos-servicos-cat', auth, async (req, res) => {
+  try {
+    const usuario = await Usuario.findByPk(req.usuario.id);
+    if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado' });
+
+    const categorias = await CategoriaServico.findAll({
+      where: { SalaoId: usuario.SalaoId },
+      attributes: ['id', 'nome'],
+      include: [
+        {
+          model: Servico,
+          as: 'servicos',
+          where: { ativo: true },
+          attributes: ['id', 'nome', 'descricao', 'preco', 'ativo'],
+          required: false
+        }
+      ]
+    });
+
+    res.json(categorias);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ erro: 'Erro ao buscar serviços' });
+  }
+});
+
 
 
 

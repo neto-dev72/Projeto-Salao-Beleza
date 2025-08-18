@@ -6,7 +6,7 @@
     elevate-on-scroll
     flat
   >
-    <!-- Ícone hambúrguer -->
+    <!-- Ícone hambúrguer (só aparece no mobile) -->
     <v-app-bar-nav-icon class="d-md-none toggler" @click="drawer = !drawer">
       <v-icon>{{ drawer ? 'mdi-close' : 'mdi-menu' }}</v-icon>
     </v-app-bar-nav-icon>
@@ -18,10 +18,10 @@
 
     <v-spacer />
 
-    <!-- Botão principal: Atender Cliente -->
+    <!-- Botão principal: Atender Cliente (desktop) -->
     <v-btn
-      v-if="isLoggedIn"
-      class="btn-acao-principal d-none d-md-flex"
+      v-if="isLoggedIn && mdAndUp"
+      class="btn-acao-principal"
       color="#FF5722"
       size="large"
       rounded
@@ -32,71 +32,94 @@
       Atender Cliente
     </v-btn>
 
-    <!-- Menu horizontal -->
-    <template v-for="item in menus" :key="item.title">
-      <v-btn
-        v-if="!item.submenus"
-        text
-        class="nav-btn d-none d-md-flex"
-        @click="navigateTo(item.route)"
-      >
-        <v-icon left>
-          {{ item.title === 'De Produtos' || item.title === 'Produtos' ? 'mdi-cart' : item.icon }}
-        </v-icon>
-        {{ item.title }}
+    <!-- Menu horizontal (desktop) -->
+    <template v-if="mdAndUp">
+      <template v-for="item in menus" :key="item.title">
+
+        <!-- Botão simples (exceto Agendamentos) -->
+        <v-btn
+          v-if="!item.submenus && item.title !== 'Agendamentos'"
+          text
+          class="nav-btn"
+          @click="navigateTo(item.route)"
+        >
+          <v-icon left>
+            {{ item.title === 'De Produtos' || item.title === 'Produtos' ? 'mdi-cart' : item.icon }}
+          </v-icon>
+          {{ item.title }}
+        </v-btn>
+
+        <!-- Agendamentos com badge -->
         <v-badge
-          v-if="item.title === 'Agendamentos' && agendamentosCount > 0"
+          v-else-if="!item.submenus && item.title === 'Agendamentos' && agendamentosCount > 0"
           :content="agendamentosCount"
           color="pink"
+          location="top end"
           overlap
-          class="ml-2"
-        ></v-badge>
-      </v-btn>
-
-      <v-menu
-        v-else
-        offset-y
-        open-on-hover
-        bottom
-        class="d-none d-md-flex"
-      >
-        <template #activator="{ props }">
-          <v-btn v-bind="props" text class="nav-btn">
-            <v-icon left>{{ item.icon }}</v-icon>
-            {{ item.title }}
-            <v-icon right>mdi-menu-down</v-icon>
-          </v-btn>
-        </template>
-        <v-list>
-          <v-list-item
-            v-for="sub in item.submenus"
-            :key="sub.title"
-            @click="navigateTo(sub.route)"
-            link
+          :offset-x="4"
+          :offset-y="4"
+        >
+          <v-btn
+            text
+            class="nav-btn"
+            @click="navigateTo(item.route)"
           >
-            <v-list-item-icon>
-              <v-icon>
-                {{ sub.title === 'De Produtos' || sub.title === 'Produtos' ? 'mdi-cart' : sub.icon }}
-              </v-icon>
-            </v-list-item-icon>
-            <v-list-item-content>
-              <v-list-item-title>{{ sub.title }}</v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
-        </v-list>
-      </v-menu>
-    </template>
+            <v-icon left>mdi-calendar-check</v-icon>
+            {{ item.title }}
+          </v-btn>
+        </v-badge>
 
-    <!-- Logout -->
-    <v-btn
-      v-if="isLoggedIn"
-      text
-      @click="logout"
-      class="logout-btn d-none d-md-flex"
-    >
-      <v-icon left>mdi-exit-to-app</v-icon>
-      Terminar Sessão
-    </v-btn>
+        <!-- Agendamentos sem badge -->
+        <v-btn
+          v-else-if="!item.submenus && item.title === 'Agendamentos'"
+          text
+          class="nav-btn"
+          @click="navigateTo(item.route)"
+        >
+          <v-icon left>mdi-calendar-check</v-icon>
+          {{ item.title }}
+        </v-btn>
+
+        <!-- Submenus -->
+        <v-menu v-else offset-y open-on-hover bottom>
+          <template #activator="{ props }">
+            <v-btn v-bind="props" text class="nav-btn">
+              <v-icon left>{{ item.icon }}</v-icon>
+              {{ item.title }}
+              <v-icon right>mdi-menu-down</v-icon>
+            </v-btn>
+          </template>
+          <v-list>
+            <v-list-item
+              v-for="sub in item.submenus"
+              :key="sub.title"
+              @click="navigateTo(sub.route)"
+              link
+            >
+              <v-list-item-icon>
+                <v-icon>
+                  {{ sub.title === 'De Produtos' || sub.title === 'Produtos' ? 'mdi-cart' : sub.icon }}
+                </v-icon>
+              </v-list-item-icon>
+              <v-list-item-content>
+                <v-list-item-title>{{ sub.title }}</v-list-item-title>
+              </v-list-item-content>
+            </v-list-item>
+          </v-list>
+        </v-menu>
+      </template>
+
+      <!-- Logout (desktop) -->
+      <v-btn
+        v-if="isLoggedIn"
+        text
+        @click="logout"
+        class="logout-btn"
+      >
+        <v-icon left>mdi-exit-to-app</v-icon>
+        Terminar Sessão
+      </v-btn>
+    </template>
   </v-app-bar>
 
   <!-- Drawer mobile -->
@@ -107,7 +130,6 @@
     class="d-md-none sidebar"
   >
     <v-list dense nav>
-
       <!-- Botão "Atender Cliente" no mobile -->
       <v-list-item
         v-if="isLoggedIn"
@@ -139,44 +161,82 @@
         </v-list-item-content>
       </v-list-item>
 
-      <!-- Menus -->
+      <!-- Menus (mobile) -->
       <template v-for="item in menus" :key="item.title">
-        <v-list-group
-          v-if="item.submenus"
-          no-action
-          v-model="expanded[item.title]"
-          class="sidebar-group"
-        >
-          <template #activator>
-            <v-list-item>
-              <v-list-item-icon>
-                <v-icon>{{ item.icon }}</v-icon>
-              </v-list-item-icon>
-              <v-list-item-content>
-                <v-list-item-title>{{ item.title }}</v-list-item-title>
-              </v-list-item-content>
-              <v-icon>{{ expanded[item.title] ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-            </v-list-item>
-          </template>
-
-          <v-list-item
-            v-for="sub in item.submenus"
-            :key="sub.title"
-            @click="navigateTo(sub.route)"
-            link
-            class="sidebar-subitem"
-          >
+        <!-- Se tiver submenus -->
+        <template v-if="item.submenus">
+          <v-list-item @click="expanded[item.title] = !expanded[item.title]">
             <v-list-item-icon>
-              <v-icon>
-                {{ sub.title === 'De Produtos' || sub.title === 'Produtos' ? 'mdi-cart' : sub.icon }}
-              </v-icon>
+              <v-icon>{{ item.icon }}</v-icon>
             </v-list-item-icon>
             <v-list-item-content>
-              <v-list-item-title>{{ sub.title }}</v-list-item-title>
+              <v-list-item-title class="font-weight-bold">
+                {{ item.title }}
+              </v-list-item-title>
             </v-list-item-content>
+            <v-icon>{{ expanded[item.title] ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
           </v-list-item>
-        </v-list-group>
 
+          <v-expand-transition>
+            <div v-show="expanded[item.title]">
+              <v-list-item
+                v-for="sub in item.submenus"
+                :key="sub.title"
+                @click="navigateTo(sub.route)"
+                link
+                class="sidebar-subitem pl-8"
+              >
+                <v-list-item-icon>
+                  <v-icon>
+                    {{ sub.title === 'De Produtos' || sub.title === 'Produtos' ? 'mdi-cart' : sub.icon }}
+                  </v-icon>
+                </v-list-item-icon>
+                <v-list-item-content>
+                  <v-list-item-title>{{ sub.title }}</v-list-item-title>
+                </v-list-item-content>
+              </v-list-item>
+            </div>
+          </v-expand-transition>
+        </template>
+
+        <!-- Agendamentos com badge no mobile -->
+        <v-list-item
+          v-else-if="item.title === 'Agendamentos' && agendamentosCount > 0"
+          @click="navigateTo(item.route)"
+          link
+        >
+          <v-list-item-icon>
+            <v-badge
+              :content="agendamentosCount"
+              color="pink"
+              location="top end"
+              overlap
+              :offset-x="4"
+              :offset-y="4"
+            >
+              <v-icon>mdi-calendar-check</v-icon>
+            </v-badge>
+          </v-list-item-icon>
+          <v-list-item-content>
+            <v-list-item-title>{{ item.title }}</v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
+
+        <!-- Agendamentos sem badge no mobile -->
+        <v-list-item
+          v-else-if="item.title === 'Agendamentos'"
+          @click="navigateTo(item.route)"
+          link
+        >
+          <v-list-item-icon>
+            <v-icon>mdi-calendar-check</v-icon>
+          </v-list-item-icon>
+          <v-list-item-content>
+            <v-list-item-title>{{ item.title }}</v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
+
+        <!-- Outros menus simples -->
         <v-list-item
           v-else
           @click="navigateTo(item.route)"
@@ -190,12 +250,6 @@
           <v-list-item-content>
             <v-list-item-title>{{ item.title }}</v-list-item-title>
           </v-list-item-content>
-          <v-badge
-            v-if="item.title === 'Agendamentos' && agendamentosCount > 0"
-            :content="agendamentosCount"
-            color="pink"
-            overlap
-          ></v-badge>
         </v-list-item>
       </template>
 
@@ -213,11 +267,10 @@
   </v-navigation-drawer>
 </template>
 
-
-
 <script lang="ts">
 import { defineComponent, ref, computed, watch, onMounted, onUnmounted, reactive } from "vue";
 import { useRouter } from "vue-router";
+import { useDisplay } from "vuetify";
 import axios from "axios";
 import LogoBernet from "@/assets/img/Logo-Bernet.png";
 
@@ -233,6 +286,9 @@ export default defineComponent({
     const isLoggedIn = computed(() => !!token.value);
     const agendamentosCount = ref(0);
     let intervalId: number | undefined;
+
+    // Breakpoints do Vuetify
+    const { mdAndUp } = useDisplay();
 
     const buildMenus = (usuario: any, salao: any) => {
       if (usuario.funcao === "super_admin") {
@@ -274,7 +330,6 @@ export default defineComponent({
               submenus: [
                 { title: "Relatório de Vendas", route: "/gerar-relatorio", icon: "mdi-cash-register" },
                 { title: "Relatório de Funcionários", route: "/desempenho-funcionarios", icon: "mdi-account-tie" },
-                { title: "Relatório de Clientes", route: "/relatorio-clientes", icon: "mdi-account-multiple" },
                 { title: "Painel Analítico", route: "/painel-analitico", icon: "mdi-chart-box-outline" },
               ],
             },
@@ -369,15 +424,13 @@ export default defineComponent({
       isScrolled,
       navigateTo,
       logout,
+      mdAndUp,
     };
   },
 });
-
 </script>
 
-
 <style scoped>
-
 /* Botão principal (desktop) */
 .btn-acao-principal {
   font-weight: bold;
@@ -417,7 +470,6 @@ export default defineComponent({
 .btn-acao-principal-mobile .v-list-item-title {
   color: #FFFFFF !important;
 }
-
 
 .navbar {
   background-color: rgba(248, 187, 208, 0.7);
@@ -462,27 +514,17 @@ export default defineComponent({
 .sidebar-subitem:hover .v-list-item-title {
   color: #d81b60 !important;
 }
+
+.v-app-bar,
+.v-navigation-drawer,
+.v-list-item-icon {
+  overflow: visible !important;
+}
+
 @media (max-width: 900px) {
   .logo-img {
     height: 90px;
     max-width: 350px;
-  }
-  .d-md-none {
-    display: inline-flex !important;
-  }
-  .d-none {
-    display: none !important;
-  }
-  .d-md-flex {
-    display: none !important;
-  }
-}
-@media (min-width: 901px) {
-  .d-md-flex {
-    display: inline-flex !important;
-  }
-  .d-md-none {
-    display: none !important;
   }
 }
 </style>
