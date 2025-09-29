@@ -105,7 +105,6 @@ import { defineComponent, ref, onMounted } from 'vue';
 import axios from 'axios';
 import LineChart from '@/components/LineChart.vue';
 import BarChart from '@/components/BarChart.vue';
-// Importa o ProdutoResumo aqui, ajuste o caminho conforme seu projeto
 import ProdutoResumo from '@/components/produtoresumo.vue';
 
 export default defineComponent({

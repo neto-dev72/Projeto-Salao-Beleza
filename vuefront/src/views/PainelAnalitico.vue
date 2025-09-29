@@ -13,6 +13,7 @@
           Acompanhe os principais números do seu salão neste período. Esses indicadores ajudam a entender o crescimento e os pontos de atenção.
         </p>
 
+        <!-- Seleção de Período -->
         <v-select
           v-model="periodoSelecionado"
           :items="opcoesPeriodo"
@@ -37,6 +38,7 @@
       </v-col>
     </v-row>
 
+    <!-- Cards -->
     <v-row dense v-if="!loading">
       <v-col
         cols="12"
@@ -104,14 +106,11 @@ import axios from 'axios';
 import Graficos from '@/components/Graficos.vue';
 import ListagensDetalhadas from '@/components/ListagensDetalhadas.vue';
 import DetalheProServDash from '@/components/DetalheProServDash.vue';
+import dayjs from 'dayjs';
 
 export default defineComponent({
   name: 'PainelFinanceiro',
-  components: {
-    Graficos,
-    ListagensDetalhadas,
-    DetalheProServDash,
-  },
+  components: { Graficos, ListagensDetalhadas, DetalheProServDash },
   setup() {
     const erro = ref('');
     const loading = ref(false);
@@ -123,7 +122,7 @@ export default defineComponent({
       lucro: 0,
       ticketMedio: 0,
       funcionarioTop: '',
-      clienteTop: '',  // Adicionando cliente destacado
+      clienteTop: '',
       servicoTop: '',
       variacaoLucro: 0,
       totalServicos: 0,
@@ -141,29 +140,63 @@ export default defineComponent({
     ];
 
     const formatarMoeda = (valor: number) =>
-      `Kz ${valor.toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}`;
+      `Kz ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const cards = ref([
       { title: 'Receita Total', value: 'Kz 0,00', icon: 'mdi-cash-multiple' },
       { title: 'Despesa Total', value: 'Kz 0,00', icon: 'mdi-cash-minus' },
       { title: 'Lucro Líquido', value: 'Kz 0,00', icon: 'mdi-cash-plus' },
       { title: 'Funcionário Destacado', value: '-', icon: 'mdi-account-tie' },
-      { title: 'Cliente Destacado', value: '-', icon: 'mdi-account' },  // Adicionando cartão de cliente destacado
+      { title: 'Cliente Destacado', value: '-', icon: 'mdi-account' },
       { title: 'Serviço Mais Demandado', value: '-', icon: 'mdi-star-check' },
       { title: 'Crescimento ou Queda do Lucro em %', value: '0%', icon: 'mdi-chart-line' },
       { title: 'Receita de Serviços', value: 'Kz 0,00', icon: 'mdi-cogs' },
       { title: 'Receita de Produtos', value: 'Kz 0,00', icon: 'mdi-cart' },
     ]);
 
+    const calcularPeriodo = () => {
+      const agora = dayjs();
+      let inicio;
+      const fim = agora.endOf('day');
+
+      switch (periodoSelecionado.value) {
+        case 'hoje':
+          inicio = agora.startOf('day');
+          break;
+        case 'semana':
+          inicio = agora.subtract(6, 'day').startOf('day');
+          break;
+        case 'mes':
+          inicio = agora.subtract(1, 'month').startOf('day');
+          break;
+        case 'trimestre':
+          inicio = agora.subtract(3, 'month').startOf('day');
+          break;
+        case 'semestre':
+          inicio = agora.subtract(6, 'month').startOf('day');
+          break;
+        case 'ano':
+          inicio = agora.startOf('year');
+          break;
+        default:
+          inicio = agora.startOf('month');
+      }
+
+      return {
+        startDate: inicio.format('YYYY-MM-DD'),
+        endDate: fim.format('YYYY-MM-DD')
+      };
+    };
+
     const carregarDados = async () => {
       erro.value = '';
       loading.value = true;
+
       try {
+        const { startDate, endDate } = calcularPeriodo();
+
         const { data } = await axios.get('/painel/indicadores', {
-          params: { periodo: periodoSelecionado.value },
+          params: { startDate, endDate },
         });
 
         dados.value = data;
@@ -173,14 +206,13 @@ export default defineComponent({
           { title: 'Despesa Total', value: formatarMoeda(Number(data.totalDespesas)), icon: 'mdi-cash-minus' },
           { title: 'Lucro Líquido', value: formatarMoeda(Number(data.lucro)), icon: 'mdi-cash-plus' },
           { title: 'Funcionário Destacado', value: data.funcionarioTop || 'N/A', icon: 'mdi-account-tie' },
-          { title: 'Cliente Destacado', value: data.clienteTop || 'N/A', icon: 'mdi-account' },  // Atualizando o cartão de cliente destacado
+          { title: 'Cliente Destacado', value: data.clienteTop || 'N/A', icon: 'mdi-account' },
           { title: 'Serviço Mais Demandado', value: data.servicoTop || 'N/A', icon: 'mdi-star-check' },
           { title: 'Lucro Percentual', value: `${Number(data.variacaoLucro).toFixed(2)}%`, icon: 'mdi-chart-line' },
           { title: 'Receita de Serviços', value: formatarMoeda(Number(data.totalServicos)), icon: 'mdi-cogs' },
           { title: 'Receita de Produtos', value: formatarMoeda(Number(data.totalProdutos)), icon: 'mdi-cart' },
         ];
 
-        console.log('Dados carregados:', data);
       } catch (err: any) {
         erro.value = err.response?.data?.erro || 'Erro ao carregar indicadores.';
         console.error(err);
@@ -194,23 +226,14 @@ export default defineComponent({
       return opcao ? opcao.text : 'Período';
     });
 
-    watch(periodoSelecionado, () => {
-      carregarDados();
-    });
+    watch(periodoSelecionado, carregarDados);
 
     onMounted(() => {
       carregarDados();
     });
 
-    return {
-      cards,
-      erro,
-      loading,
-      periodoSelecionado,
-      opcoesPeriodo,
-      labelPeriodo,
-    };
-  },
+    return { cards, erro, loading, periodoSelecionado, opcoesPeriodo, labelPeriodo };
+  }
 });
 </script>
 
@@ -220,7 +243,7 @@ export default defineComponent({
   border-radius: 10px;
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(216, 27, 96, 0.08); /* vinho */
+  box-shadow: 0 4px 12px rgba(216, 27, 96, 0.08);
   height: 150px;
   padding: 16px;
 }
@@ -231,7 +254,7 @@ export default defineComponent({
 }
 
 .icon-circle {
-  background-color: rgba(216, 27, 96, 0.1); /* rosa claro */
+  background-color: rgba(216, 27, 96, 0.1);
   border-radius: 50%;
   padding: 8px;
   width: 48px;
@@ -244,7 +267,7 @@ export default defineComponent({
 .titulo-painel {
   font-size: 2rem;
   font-weight: 800;
-  background: linear-gradient(90deg, #880e4f, #f06292); /* vinho para rosa */
+  background: linear-gradient(90deg, #880e4f, #f06292);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 12px;

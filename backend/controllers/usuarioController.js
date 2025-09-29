@@ -327,57 +327,52 @@ router.post('/cadastrar-despesas', auth, async (req, res) => {
 
 const { Op } = require('sequelize');
 
-router.get('/relatorio-servico', auth, async (req, res) => {
-  try {
-    let { servicoIds, produtoIds, periodo, incluirDespesas } = req.query;
 
+router.get('/relatorio-servico', auth, async (req, res) => {
+  const { startDate, endDate, servicoIds, produtoIds, incluirDespesas, geral } = req.query;
+
+  if (!startDate || !endDate) {
+    return res.status(400).json({ message: 'startDate e endDate são obrigatórios.' });
+  }
+
+  const dataInicio = new Date(startDate);
+  const dataFim = new Date(endDate);
+  dataFim.setHours(23, 59, 59, 999);
+
+  try {
     const usuario = await Usuario.findByPk(req.usuario.id);
-    if (!usuario) {
-      return res.status(404).json({ message: 'Usuário não encontrado' });
-    }
+    if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado' });
     const SalaoId = usuario.SalaoId;
 
     const parseIds = (ids) => {
       if (!ids) return [];
       if (Array.isArray(ids)) return ids.map(Number).filter(Boolean);
-      return [Number(ids)].filter(Boolean);
+      return ids.split(',').map(Number).filter(Boolean);
     };
-    servicoIds = parseIds(servicoIds);
-    produtoIds = parseIds(produtoIds);
-    incluirDespesas = incluirDespesas === 'true';
 
-    if ((!servicoIds.length && !produtoIds.length) || !periodo) {
-      return res.status(400).json({ message: 'Serviço(s), produto(s) ou período não fornecido(s)' });
+    const isGeral = geral === 'true';
+    const servicosSelecionados = isGeral ? [] : parseIds(servicoIds);
+    const produtosSelecionados = isGeral ? [] : parseIds(produtoIds);
+    const incluirDesp = incluirDespesas === 'true';
+
+    if (!isGeral && !servicosSelecionados.length && !produtosSelecionados.length) {
+      return res.status(400).json({ message: 'Serviço(s) ou produto(s) não fornecido(s).' });
     }
-
-    const endDate = new Date();
-    const startDate = new Date(endDate);
-
-    switch (periodo) {
-      case 'dia': break;
-      case 'semana': startDate.setDate(endDate.getDate() - 7); break;
-      case 'mes': startDate.setMonth(endDate.getMonth() - 1); break;
-      case 'trimestre': startDate.setMonth(endDate.getMonth() - 3); break;
-      case 'ano': startDate.setFullYear(endDate.getFullYear() - 1); break;
-      default: return res.status(400).json({ message: 'Período inválido' });
-    }
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
 
     const vendas = await Venda.findAll({
       where: {
         SalaoId,
-        createdAt: { [Op.between]: [startDate, endDate] },
+        dataVenda: { [Op.between]: [dataInicio, dataFim] },
       },
       attributes: ['id'],
+      raw: true
     });
 
     const vendaIds = vendas.map(v => v.id);
-
     if (!vendaIds.length) {
       return res.json({
-        dataInicio: startDate.toISOString().slice(0, 10),
-        dataFim: endDate.toISOString().slice(0, 10),
+        dataInicio: startDate,
+        dataFim: endDate,
         totalVendas: 0,
         totalServicosVendidos: 0,
         totalProdutosVendidos: 0,
@@ -385,117 +380,114 @@ router.get('/relatorio-servico', auth, async (req, res) => {
         detalhesProdutos: [],
         totalVendido: 0,
         totalDespesas: 0,
-        saldo: 0,
+        saldo: 0
       });
     }
 
-    const servicos = servicoIds.length
-      ? await Servico.findAll({ where: { id: { [Op.in]: servicoIds } } })
-      : [];
-    const produtos = produtoIds.length
-      ? await Produtos.findAll({ where: { id: { [Op.in]: produtoIds } } })
-      : [];
-
-    const precosServicos = {};
-    const nomesServicos = {};
-    servicos.forEach(s => {
-      precosServicos[s.id] = parseFloat(s.preco);
-      nomesServicos[s.id] = s.nome;
-    });
-
-    const precosProdutos = {};
-    const nomesProdutos = {};
-    produtos.forEach(p => {
-      precosProdutos[p.id] = parseFloat(p.precoVenda); // <- ALTERADO AQUI
-      nomesProdutos[p.id] = p.nome;
-    });
-
-    const vendasServicos = servicoIds.length
-      ? await VendaServico.findAll({
-          where: {
-            VendaId: { [Op.in]: vendaIds },
-            ServicoId: { [Op.in]: servicoIds },
-          },
-        })
-      : [];
-
-    const totaisPorServico = {};
-    const quantidadesPorServico = {};
-    let totalVendidoServicos = 0;
+    // ---------- Serviços ----------
     let totalServicosVendidos = 0;
+    let detalhesServicos = [];
 
-    vendasServicos.forEach(vs => {
-      const id = vs.ServicoId;
-      const preco = precosServicos[id] || 0;
-      totaisPorServico[id] = (totaisPorServico[id] || 0) + preco;
-      quantidadesPorServico[id] = (quantidadesPorServico[id] || 0) + 1;
-      totalVendidoServicos += preco;
-      totalServicosVendidos += 1;
-    });
+    if (isGeral || servicosSelecionados.length) {
+      const servicos = await Servico.findAll({
+        where: isGeral ? {} : { id: { [Op.in]: servicosSelecionados } },
+        raw: true
+      });
 
-    const detalhesServicos = Object.entries(totaisPorServico).map(([id, total]) => {
-      const quantidade = quantidadesPorServico[id];
-      return {
-        id: Number(id),
-        nome: nomesServicos[id],
-        quantidade,
-        total,
-        media: quantidade ? total / quantidade : 0,
-      };
-    });
+      const precosServicos = Object.fromEntries(servicos.map(s => [s.id, parseFloat(s.preco)]));
+      const nomesServicos = Object.fromEntries(servicos.map(s => [s.id, s.nome]));
 
-    const vendasProdutos = produtoIds.length
-      ? await VendaProduto.findAll({
-          where: {
-            VendaId: { [Op.in]: vendaIds },
-            ProdutoId: { [Op.in]: produtoIds },
-          },
-        })
-      : [];
+      const vendasServicos = await VendaServico.findAll({
+        where: {
+          VendaId: { [Op.in]: vendaIds },
+          ...(isGeral ? {} : { ServicoId: { [Op.in]: servicosSelecionados } })
+        },
+        raw: true
+      });
 
-    const totaisPorProduto = {};
-    const quantidadesPorProduto = {};
-    let totalVendidoProdutos = 0;
+      const totaisPorServico = {};
+      const quantidadesPorServico = {};
+
+      vendasServicos.forEach(vs => {
+        const preco = precosServicos[vs.ServicoId] || 0;
+        totaisPorServico[vs.ServicoId] = (totaisPorServico[vs.ServicoId] || 0) + preco;
+        quantidadesPorServico[vs.ServicoId] = (quantidadesPorServico[vs.ServicoId] || 0) + 1;
+        totalServicosVendidos += preco;
+      });
+
+      detalhesServicos = Object.entries(totaisPorServico).map(([id, total]) => {
+        const q = quantidadesPorServico[id];
+        return {
+          id: Number(id),
+          nome: nomesServicos[id],
+          quantidade: q,
+          total,
+          media: q ? total / q : 0
+        };
+      });
+    }
+
+    // ---------- Produtos ----------
     let totalProdutosVendidos = 0;
+    let detalhesProdutos = [];
 
-    vendasProdutos.forEach(vp => {
-      const id = vp.ProdutoId;
-      const preco = precosProdutos[id] || 0;
-      totaisPorProduto[id] = (totaisPorProduto[id] || 0) + preco;
-      quantidadesPorProduto[id] = (quantidadesPorProduto[id] || 0) + 1;
-      totalVendidoProdutos += preco;
-      totalProdutosVendidos += 1;
-    });
+    if (isGeral || produtosSelecionados.length) {
+      const produtos = await Produtos.findAll({
+        where: isGeral ? {} : { id: { [Op.in]: produtosSelecionados } },
+        raw: true
+      });
 
-    const detalhesProdutos = Object.entries(totaisPorProduto).map(([id, total]) => {
-      const quantidade = quantidadesPorProduto[id];
-      return {
-        id: Number(id),
-        nome: nomesProdutos[id],
-        quantidade,
-        total,
-        media: quantidade ? total / quantidade : 0,
-      };
-    });
+      const precosProdutos = Object.fromEntries(produtos.map(p => [p.id, parseFloat(p.precoVenda)]));
+      const nomesProdutos = Object.fromEntries(produtos.map(p => [p.id, p.nome]));
 
-    const totalVendido = totalVendidoServicos + totalVendidoProdutos;
+      const vendasProdutos = await VendaProduto.findAll({
+        where: {
+          VendaId: { [Op.in]: vendaIds },
+          ...(isGeral ? {} : { ProdutoId: { [Op.in]: produtosSelecionados } })
+        },
+        raw: true
+      });
 
+      const totaisPorProduto = {};
+      const quantidadesPorProduto = {};
+
+      vendasProdutos.forEach(vp => {
+        const preco = precosProdutos[vp.ProdutoId] || 0;
+        totaisPorProduto[vp.ProdutoId] = (totaisPorProduto[vp.ProdutoId] || 0) + preco;
+        quantidadesPorProduto[vp.ProdutoId] = (quantidadesPorProduto[vp.ProdutoId] || 0) + 1;
+        totalProdutosVendidos += preco;
+      });
+
+      detalhesProdutos = Object.entries(totaisPorProduto).map(([id, total]) => {
+        const q = quantidadesPorProduto[id];
+        return {
+          id: Number(id),
+          nome: nomesProdutos[id],
+          quantidade: q,
+          total,
+          media: q ? total / q : 0
+        };
+      });
+    }
+
+    const totalVendido = totalServicosVendidos + totalProdutosVendidos;
+
+    // ---------- Despesas (agora usando dataDespesa) ----------
     let totalDespesas = 0;
-    if (incluirDespesas) {
+    if (incluirDesp) {
       const despesas = await Despesa.findAll({
         where: {
           SalaoId,
-          createdAt: { [Op.between]: [startDate, endDate] },
+          dataDespesa: { [Op.between]: [dataInicio, dataFim] }, // 🔹 campo corrigido
         },
+        raw: true
       });
-      totalDespesas = despesas.reduce((sum, d) => sum + parseFloat(d.valor), 0);
+      totalDespesas = despesas.reduce((s, d) => s + parseFloat(d.valor), 0);
     }
 
-    const saldo = totalVendido - totalDespesas;
-
     res.json({
-      dataInicio: startDate.toISOString().slice(0, 10),
-      dataFim: endDate.toISOString().slice(0, 10),
+      dataInicio: startDate,
+      dataFim: endDate,
       totalVendas: vendas.length,
       totalServicosVendidos,
       totalProdutosVendidos,
@@ -503,25 +495,13 @@ router.get('/relatorio-servico', auth, async (req, res) => {
       detalhesProdutos,
       totalVendido,
       totalDespesas,
-      saldo,
+      saldo: totalVendido - totalDespesas
     });
   } catch (error) {
-    console.error('Erro ao gerar relatório completo:', error);
-    res.status(500).json({ message: 'Erro no servidor ao gerar relatório' });
+    console.error('Erro ao gerar relatório de serviços:', error);
+    res.status(500).json({ message: 'Erro ao gerar relatório de serviços' });
   }
 });
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -902,106 +882,66 @@ router.delete('/servicos/:id', async (req, res) => {
 
 
 
+
 router.get('/painel/indicadores', auth, async (req, res) => {
-  const agora = new Date();
+  const { startDate, endDate } = req.query;
 
-  let inicioPeriodo;
-  let fimPeriodo = agora;
-
-  const periodo = req.query.periodo || 'mes';
-
-  // Define os períodos conforme seleção
-  if (periodo === 'hoje') {
-    inicioPeriodo = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 0, 0, 0);
-    fimPeriodo = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), 23, 59, 59, 999);
-  } else if (periodo === 'semana') {
-    const diaSemana = agora.getDay();
-    const diffInicio = diaSemana === 0 ? 6 : diaSemana - 1;
-    inicioPeriodo = new Date(agora);
-    inicioPeriodo.setDate(agora.getDate() - diffInicio);
-    inicioPeriodo.setHours(0, 0, 0, 0);
-
-    fimPeriodo = new Date(inicioPeriodo);
-    fimPeriodo.setDate(inicioPeriodo.getDate() + 6);
-    fimPeriodo.setHours(23, 59, 59, 999);
-  } else if (periodo === 'mes') {
-    inicioPeriodo = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
-    fimPeriodo = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59, 999);
-  } else if (periodo === 'trimestre') {
-    const trimestre = Math.floor(agora.getMonth() / 3);
-    inicioPeriodo = new Date(agora.getFullYear(), trimestre * 3, 1, 0, 0, 0);
-    fimPeriodo = new Date(agora.getFullYear(), (trimestre + 1) * 3, 0, 23, 59, 59, 999);
-  } else if (periodo === 'semestre') {
-    const semestre = agora.getMonth() < 6 ? 0 : 1;
-    inicioPeriodo = new Date(agora.getFullYear(), semestre * 6, 1, 0, 0, 0);
-    fimPeriodo = new Date(agora.getFullYear(), (semestre + 1) * 6, 0, 23, 59, 59, 999);
-  } else if (periodo === 'ano') {
-    inicioPeriodo = new Date(agora.getFullYear(), 0, 1, 0, 0, 0);
-    fimPeriodo = new Date(agora.getFullYear(), 11, 31, 23, 59, 59, 999);
-  } else if (periodo === 'todos') {
-    inicioPeriodo = null;
-    fimPeriodo = null;
-  } else {
-    inicioPeriodo = new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0);
-    fimPeriodo = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59, 999);
+  if (!startDate || !endDate) {
+    return res.status(400).json({ message: 'startDate e endDate são obrigatórios.' });
   }
+
+  const inicioPeriodo = new Date(startDate);
+  const fimPeriodo = new Date(endDate);
+  fimPeriodo.setHours(23, 59, 59, 999); // garante o dia completo
 
   try {
     const usuario = await Usuario.findByPk(req.usuario.id);
-    if (!usuario) {
-      return res.status(404).json({ message: 'Usuário não encontrado' });
-    }
+    if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado' });
     const SalaoId = usuario.SalaoId;
 
-    const whereFiltro = { SalaoId };
-    if (inicioPeriodo && fimPeriodo) {
-      whereFiltro.createdAt = { [Op.between]: [inicioPeriodo, fimPeriodo] };
-    } else if (inicioPeriodo) {
-      whereFiltro.createdAt = { [Op.gte]: inicioPeriodo };
-    }
-
+    // Filtra vendas pelo período usando dataVenda
     const vendasPeriodo = await Venda.findAll({
-      where: whereFiltro,
-      attributes: ['id', 'valorTotal', 'UsuarioId', 'clienteId']
+      where: {
+        SalaoId,
+        dataVenda: { [Op.between]: [inicioPeriodo, fimPeriodo] }
+      },
+      attributes: ['id', 'valorTotal', 'UsuarioId', 'clienteId'],
+      raw: true
     });
-
     const totalReceitas = vendasPeriodo.reduce((acc, venda) => acc + parseFloat(venda.valorTotal), 0);
 
-    const whereDespesa = { SalaoId };
-    if (inicioPeriodo && fimPeriodo) {
-      whereDespesa.createdAt = { [Op.between]: [inicioPeriodo, fimPeriodo] };
-    } else if (inicioPeriodo) {
-      whereDespesa.createdAt = { [Op.gte]: inicioPeriodo };
-    }
-
+    // Filtra despesas pelo período usando dataDespesa
     const despesas = await Despesa.findAll({
-      where: whereDespesa,
-      attributes: ['valor']
+      where: {
+        SalaoId,
+        dataDespesa: { [Op.between]: [inicioPeriodo, fimPeriodo] }
+      },
+      attributes: ['valor'],
+      raw: true
     });
     const totalDespesas = despesas.reduce((acc, despesa) => acc + parseFloat(despesa.valor), 0);
 
+    // Clientes e ticket médio
     const clientesUnicos = [...new Set(vendasPeriodo.map(v => v.clienteId))];
     const ticketMedio = clientesUnicos.length > 0 ? totalReceitas / clientesUnicos.length : 0;
 
-    // Buscar o FuncionarioTop baseado em VendaServico
+    // Serviços vendidos
     const idsVendas = vendasPeriodo.map(v => v.id);
-    const vendaServicoWhere = { VendaId: idsVendas.length ? idsVendas : [0] };
     const servicosVendidos = await VendaServico.findAll({
-      where: vendaServicoWhere,
-      attributes: ['ServicoId', 'FuncionarioId']
+      where: { VendaId: { [Op.in]: idsVendas.length ? idsVendas : [0] } },
+      attributes: ['ServicoId', 'FuncionarioId'],
+      raw: true
     });
 
+    // Funcionário Top
     const receitaPorFuncionario = {};
     servicosVendidos.forEach(vs => {
-      if (vs.FuncionarioId) {
-        receitaPorFuncionario[vs.FuncionarioId] = (receitaPorFuncionario[vs.FuncionarioId] || 0) + 1;
-      }
+      if (vs.FuncionarioId) receitaPorFuncionario[vs.FuncionarioId] = (receitaPorFuncionario[vs.FuncionarioId] || 0) + 1;
     });
 
     let funcionarioTop = 'Nenhum';
     let maiorReceita = 0;
-    const funcionarios = await Funcionario.findAll({ where: { SalaoId }, attributes: ['id', 'nome'] });
-
+    const funcionarios = await Funcionario.findAll({ where: { SalaoId }, attributes: ['id', 'nome'], raw: true });
     funcionarios.forEach(func => {
       if (receitaPorFuncionario[func.id] && receitaPorFuncionario[func.id] > maiorReceita) {
         funcionarioTop = func.nome;
@@ -1009,6 +949,7 @@ router.get('/painel/indicadores', auth, async (req, res) => {
       }
     });
 
+    // Serviço mais vendido
     const contagemServicos = {};
     servicosVendidos.forEach(s => {
       contagemServicos[s.ServicoId] = (contagemServicos[s.ServicoId] || 0) + 1;
@@ -1016,7 +957,7 @@ router.get('/painel/indicadores', auth, async (req, res) => {
 
     let servicoTop = 'Nenhum';
     let maisVendido = 0;
-    const servicos = await Servico.findAll({ attributes: ['id', 'nome', 'preco'] });
+    const servicos = await Servico.findAll({ attributes: ['id', 'nome', 'preco'], raw: true });
     servicos.forEach(s => {
       if (contagemServicos[s.id] && contagemServicos[s.id] > maisVendido) {
         servicoTop = s.nome;
@@ -1027,40 +968,29 @@ router.get('/painel/indicadores', auth, async (req, res) => {
     let totalServicos = 0;
     servicosVendidos.forEach(sv => {
       const servico = servicos.find(s => s.id === sv.ServicoId);
-      if (servico) {
-        totalServicos += parseFloat(servico.preco);
-      }
+      if (servico) totalServicos += parseFloat(servico.preco);
     });
 
     // Produtos vendidos
     const vendaProdutoWhere = { VendaId: idsVendas.length ? idsVendas : [0] };
-    const produtosVendidos = await VendaProduto.findAll({
-      where: vendaProdutoWhere,
-      attributes: ['ProdutoId']
-    });
-
-    const produtos = await Produtos.findAll({ where: { SalaoId }, attributes: ['id', 'nome', 'precoVenda'] });
+    const produtosVendidos = await VendaProduto.findAll({ where: vendaProdutoWhere, attributes: ['ProdutoId'], raw: true });
+    const produtos = await Produtos.findAll({ where: { SalaoId }, attributes: ['id', 'nome', 'precoVenda'], raw: true });
 
     let totalProdutos = 0;
     produtosVendidos.forEach(pv => {
       const produto = produtos.find(p => p.id === pv.ProdutoId);
-      if (produto) {
-        totalProdutos += parseFloat(produto.precoVenda);
-      }
+      if (produto) totalProdutos += parseFloat(produto.precoVenda);
     });
 
-    // Buscando o cliente destacado
+    // Cliente destacado
     const clienteValor = {};
     vendasPeriodo.forEach(v => {
-      if (v.clienteId) {
-        clienteValor[v.clienteId] = (clienteValor[v.clienteId] || 0) + parseFloat(v.valorTotal);
-      }
+      if (v.clienteId) clienteValor[v.clienteId] = (clienteValor[v.clienteId] || 0) + parseFloat(v.valorTotal);
     });
 
     let clienteTop = 'Nenhum';
     let maiorGasto = 0;
-    const clientes = await Cliente.findAll({ where: { SalaoId }, attributes: ['id', 'nome'] });
-
+    const clientes = await Cliente.findAll({ where: { SalaoId }, attributes: ['id', 'nome'], raw: true });
     clientes.forEach(cliente => {
       if (clienteValor[cliente.id] && clienteValor[cliente.id] > maiorGasto) {
         clienteTop = cliente.nome;
@@ -1068,85 +998,24 @@ router.get('/painel/indicadores', auth, async (req, res) => {
       }
     });
 
-    // Calculando a variação de lucro entre o período atual e o anterior
-    let variacao = 0;
-    if (periodo !== 'todos') {
-      let inicioAnterior;
-      let fimAnterior;
-
-      // Configuração para o cálculo do período anterior
-      if (periodo === 'hoje') {
-        inicioAnterior = new Date(inicioPeriodo);
-        inicioAnterior.setDate(inicioAnterior.getDate() - 1);
-        fimAnterior = new Date(fimPeriodo);
-        fimAnterior.setDate(fimAnterior.getDate() - 1);
-      } else if (periodo === 'semana') {
-        inicioAnterior = new Date(inicioPeriodo);
-        inicioAnterior.setDate(inicioAnterior.getDate() - 7);
-        fimAnterior = new Date(inicioPeriodo);
-        fimAnterior.setDate(inicioAnterior.getDate() - 1);
-        fimAnterior.setHours(23, 59, 59, 999);
-      } else if (periodo === 'mes') {
-        inicioAnterior = new Date(inicioPeriodo.getFullYear(), inicioPeriodo.getMonth() - 1, 1);
-        fimAnterior = new Date(inicioPeriodo.getFullYear(), inicioPeriodo.getMonth(), 0, 23, 59, 59, 999);
-      } else if (periodo === 'trimestre') {
-        const trimestreAtual = Math.floor(inicioPeriodo.getMonth() / 3);
-        const trimestreAnterior = trimestreAtual - 1;
-        inicioAnterior = new Date(inicioPeriodo.getFullYear(), trimestreAnterior * 3, 1);
-        fimAnterior = new Date(inicioPeriodo.getFullYear(), trimestreAtual * 3, 0, 23, 59, 59, 999);
-      } else if (periodo === 'semestre') {
-        const semestreAtual = inicioPeriodo.getMonth() < 6 ? 0 : 1;
-        const semestreAnterior = semestreAtual - 1;
-        if (semestreAnterior < 0) {
-          inicioAnterior = new Date(inicioPeriodo.getFullYear() - 1, 6, 1);
-          fimAnterior = new Date(inicioPeriodo.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
-        } else {
-          inicioAnterior = new Date(inicioPeriodo.getFullYear(), semestreAnterior * 6, 1);
-          fimAnterior = new Date(inicioPeriodo.getFullYear(), semestreAtual * 6, 0, 23, 59, 59, 999);
-        }
-      } else if (periodo === 'ano') {
-        inicioAnterior = new Date(inicioPeriodo.getFullYear() - 1, 0, 1);
-        fimAnterior = new Date(inicioPeriodo.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
-      }
-
-      if (inicioAnterior && fimAnterior) {
-        const vendasAnterior = await Venda.findAll({
-          where: {
-            SalaoId,
-            createdAt: {
-              [Op.between]: [inicioAnterior, fimAnterior]
-            }
-          },
-          attributes: ['valorTotal']
-        });
-        const totalAnterior = vendasAnterior.reduce((acc, venda) => acc + parseFloat(venda.valorTotal), 0);
-
-        if (totalAnterior > 0) {
-          variacao = ((totalReceitas - totalAnterior) / totalAnterior) * 100;
-        } else {
-          variacao = 0;
-        }
-      }
-    }
-
     res.json({
       totalReceitas: totalReceitas.toFixed(2),
       totalDespesas: totalDespesas.toFixed(2),
       lucro: (totalReceitas - totalDespesas).toFixed(2),
       ticketMedio: ticketMedio.toFixed(2),
       funcionarioTop,
-      clienteTop,  // Cliente destacado
+      clienteTop,
       servicoTop,
       totalServicos: totalServicos.toFixed(2),
       totalProdutos: totalProdutos.toFixed(2),
-      variacaoLucro: variacao.toFixed(2)
+      variacaoLucro: 0 // opcional
     });
+
   } catch (erro) {
     console.error(erro);
     res.status(500).json({ erro: 'Erro ao buscar indicadores' });
   }
 });
-
 
 
 
@@ -1659,162 +1528,6 @@ router.get('/todos-funcionarios', auth, async (req, res) => {
 });
 
 
-
-
-
-
-router.get('/relatorio/funcionarios', auth, async (req, res) => {
-  const { periodo, inicio, fim, funcionarios } = req.query;
-
-  let dataInicio, dataFim;
-  const hoje = new Date();
-
-  // Passo 1: Obter o SalaoId do usuário logado
-  const usuarioId = req.usuario.id;
-  const usuario = await Usuario.findOne({
-    where: { id: usuarioId },
-    attributes: ['id', 'SalaoId'],
-    raw: true,
-  });
-
-  if (!usuario) {
-    return res.status(404).json({ erro: 'Usuário não encontrado' });
-  }
-
-  const salaoId = usuario.SalaoId;
-
-  // Passo 2: Definir os períodos com base nas escolhas do usuário
-  switch (periodo) {
-    case 'hoje':
-      dataInicio = new Date(hoje.setHours(0, 0, 0, 0));
-      dataFim = new Date(hoje.setHours(23, 59, 59, 999));
-      break;
-    case 'semana':
-      const diaSemana = hoje.getDay();
-      dataInicio = new Date(hoje);
-      dataInicio.setDate(hoje.getDate() - diaSemana);
-      dataInicio.setHours(0, 0, 0, 0);
-      dataFim = new Date();
-      dataFim.setHours(23, 59, 59, 999);
-      break;
-    case 'mes':
-      dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-      dataFim = new Date();
-      dataFim.setHours(23, 59, 59, 999);
-      break;
-    case 'trimestre':
-      const mesAtual = hoje.getMonth();
-      const inicioTrimestre = mesAtual - (mesAtual % 3);
-      dataInicio = new Date(hoje.getFullYear(), inicioTrimestre, 1);
-      dataFim = new Date();
-      dataFim.setHours(23, 59, 59, 999);
-      break;
-    case 'personalizado':
-      if (!inicio || !fim) {
-        return res.status(400).json({ erro: 'Datas de início e fim são obrigatórias.' });
-      }
-      dataInicio = new Date(inicio);
-      dataFim = new Date(fim);
-      dataFim.setHours(23, 59, 59, 999);
-      break;
-    default:
-      return res.status(400).json({ erro: 'Período inválido.' });
-  }
-
-  try {
-    // Passo 3: Filtrar funcionários pelo SalaoId e pelos ids fornecidos
-    const idsSelecionados = funcionarios
-      ? funcionarios.split(',').map(id => parseInt(id)).filter(id => !isNaN(id))
-      : [];
-
-    if (idsSelecionados.length === 0) {
-      return res.json([]); // Nenhum funcionário selecionado
-    }
-
-    // Obter os funcionários do salão do usuário logado
-    const funcionariosDoSalao = await Funcionario.findAll({
-      where: {
-        SalaoId: salaoId,
-        id: { [Op.in]: idsSelecionados }
-      },
-      raw: true
-    });
-
-    // Passo 4: Obter as vendas de serviços
-    const vendasServicos = await VendaServico.findAll({
-      where: {
-        SalaoId: salaoId,
-        FuncionarioId: { [Op.in]: idsSelecionados },
-        createdAt: {
-          [Op.between]: [dataInicio, dataFim]
-        }
-      },
-      attributes: ['FuncionarioId', 'ServicoId'],
-      raw: true
-    });
-
-    // Passo 5: Associar receita para cada funcionário
-    const dadosPorFuncionario = {};
-
-    // Para cada VendaServico, associar o preço do serviço
-    for (const vendaServico of vendasServicos) {
-      const id = vendaServico.FuncionarioId;
-      const servico = await Servico.findOne({
-        where: { id: vendaServico.ServicoId },
-        attributes: ['preco'],
-        raw: true
-      });
-
-      const precoServico = parseFloat(servico.preco);
-      if (!isNaN(precoServico)) {
-        dadosPorFuncionario[id] = dadosPorFuncionario[id] || {
-          atendimentos: 0,
-          receitaTotal: 0,
-          ultimoAtendimento: null,
-        };
-
-        dadosPorFuncionario[id].atendimentos++;
-        dadosPorFuncionario[id].receitaTotal += precoServico;
-      }
-    }
-
-    // Passo 6: Preparar o relatório
-    const relatorio = [];
-
-    for (const funcionario of funcionariosDoSalao) {
-      const dados = dadosPorFuncionario[funcionario.id] || {
-        atendimentos: 0,
-        receitaTotal: 0,
-      };
-
-      // Encontrar o último atendimento na tabela VendaServico
-      const ultimoAtendimento = await VendaServico.findOne({
-        where: { FuncionarioId: funcionario.id },
-        order: [['createdAt', 'DESC']],
-        attributes: ['createdAt'],
-        raw: true
-      });
-
-      // Preencher o campo de último atendimento
-      dados.ultimoAtendimento = ultimoAtendimento ? ultimoAtendimento.createdAt : null;
-
-      // Adicionar os dados no relatório
-      relatorio.push({
-        nome: funcionario.nome,
-        funcao: funcionario.funcao,
-        status: funcionario.ativo ? 'Ativo' : 'Inativo',
-        atendimentos: dados.atendimentos,
-        receitaTotal: dados.receitaTotal.toFixed(2),
-        ultimoAtendimento: dados.ultimoAtendimento ? new Date(dados.ultimoAtendimento).toLocaleString() : 'N/A',
-      });
-    }
-
-    res.json(relatorio);
-  } catch (erro) {
-    console.error(erro);
-    res.status(500).json({ erro: 'Erro ao gerar relatório de funcionários' });
-  }
-});
 
 
 
@@ -2464,6 +2177,152 @@ router.get('/todos-servicos-cat', auth, async (req, res) => {
   }
 });
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+router.get('/relatorio/funcionarios', async (req, res) => {
+  const { startDate, endDate, funcionarios } = req.query;
+
+  if (!startDate || !endDate) {
+    return res.status(400).json({ erro: 'startDate e endDate são obrigatórios.' });
+  }
+
+  const dataInicio = dayjs(startDate).startOf('day').toDate();
+  const dataFim    = dayjs(endDate).endOf('day').toDate();
+
+  try {
+    const idsSelecionados = funcionarios
+      ? funcionarios.split(',').map(id => parseInt(id)).filter(id => !isNaN(id))
+      : [];
+    if (!idsSelecionados.length) return res.json([]);
+
+    const funcionariosDoSalao = await Funcionario.findAll({
+      where: { id: { [Op.in]: idsSelecionados } },
+      raw: true
+    });
+
+    const vendasServicos = await VendaServico.findAll({
+      where: { FuncionarioId: { [Op.in]: idsSelecionados } },
+      include: [{
+        model: Venda,
+        attributes: ['dataVenda'],
+        required: true, // ✅ Filtro de data agora funciona
+        where: {
+          dataVenda: { [Op.between]: [dataInicio, dataFim] }
+        }
+      }],
+      attributes: ['FuncionarioId', 'ServicoId'],
+      nest: true
+    });
+
+    const dadosPorFuncionario = {};
+    for (const venda of vendasServicos) {
+      const fId = venda.FuncionarioId;
+      const servico = await Servico.findOne({
+        where: { id: venda.ServicoId },
+        attributes: ['preco'],
+        raw: true
+      });
+
+      const preco = parseFloat(servico?.preco || 0);
+      if (!dadosPorFuncionario[fId]) {
+        dadosPorFuncionario[fId] = {
+          atendimentos: 0,
+          receitaTotal: 0,
+          ultimoAtendimento: null
+        };
+      }
+      dadosPorFuncionario[fId].atendimentos++;
+      dadosPorFuncionario[fId].receitaTotal += isNaN(preco) ? 0 : preco;
+
+      const dataVenda = venda.Venda?.dataVenda;
+      if (dataVenda &&
+          (!dadosPorFuncionario[fId].ultimoAtendimento ||
+           new Date(dataVenda) > new Date(dadosPorFuncionario[fId].ultimoAtendimento))) {
+        dadosPorFuncionario[fId].ultimoAtendimento = dataVenda;
+      }
+    }
+
+    const relatorio = funcionariosDoSalao.map(func => {
+      const d = dadosPorFuncionario[func.id] || {
+        atendimentos: 0,
+        receitaTotal: 0,
+        ultimoAtendimento: null
+      };
+      return {
+        nome: func.nome,
+        funcao: func.funcao,
+        status: func.ativo ? 'Ativo' : 'Inativo',
+        atendimentos: d.atendimentos,
+        receitaTotal: d.receitaTotal.toFixed(2),
+        ultimoAtendimento: d.ultimoAtendimento
+          ? dayjs(d.ultimoAtendimento).format('DD/MM/YYYY')
+          : 'N/A'
+      };
+    });
+
+    res.status(200).json(relatorio);
+  } catch (error) {
+    console.error('Erro ao gerar relatório de funcionários:', error);
+    res.status(500).json({ erro: 'Erro ao gerar relatório de funcionários' });
+  }
+});
+
+
+
+
+
+
+
+router.get('/relatorio/despesas', async (req, res) => {
+  const { startDate, endDate } = req.query
+
+  if (!startDate || !endDate) {
+    return res.status(400).json({ erro: 'startDate e endDate são obrigatórios.' })
+  }
+
+  const dataInicio = dayjs(startDate).startOf('day').toDate()
+  const dataFim = dayjs(endDate).endOf('day').toDate()
+
+  try {
+    const despesas = await Despesa.findAll({
+      where: {
+        dataDespesa: { 
+          [Op.between]: [dataInicio, dataFim] 
+        }
+      },
+      order: [['dataDespesa', 'ASC']],
+      raw: true
+    })
+
+    res.status(200).json(despesas)
+  } catch (error) {
+    console.error('Erro ao gerar relatório de despesas:', error)
+    res.status(500).json({ erro: 'Erro ao gerar relatório de despesas' })
+  }
+})
 
 
 

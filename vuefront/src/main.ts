@@ -11,7 +11,7 @@ loadFonts()
 import axios from 'axios'
 
 
-axios.defaults.baseURL = 'https://bernet-estetica.online/';
+axios.defaults.baseURL = 'http://localhost:9000';
 
 
 // ✅ Intercepta todas as requisições para enviar o token JWT

@@ -10,6 +10,20 @@
       </v-col>
     </v-row>
 
+    <!-- Botões de exportação -->
+    <v-row justify="end" class="mb-4">
+      <v-col cols="auto">
+        <v-btn color="purple lighten-1" class="text-white" rounded @click="exportarPDF">
+          <v-icon left>mdi-file-pdf-box</v-icon> PDF
+        </v-btn>
+      </v-col>
+      <v-col cols="auto">
+        <v-btn color="green lighten-1" class="text-white" rounded @click="exportarCSV">
+          <v-icon left>mdi-file-delimited</v-icon> CSV
+        </v-btn>
+      </v-col>
+    </v-row>
+
     <!-- Cabeçalho recibo -->
     <v-row>
       <v-col cols="6">
@@ -126,7 +140,7 @@
       </v-col>
     </v-row>
 
-    <!-- Mensagem especial para o cliente -->
+    <!-- Mensagem especial -->
     <v-row justify="center" class="my-6">
       <v-col cols="12" md="10" class="text-center">
         <v-sheet
@@ -141,7 +155,7 @@
       </v-col>
     </v-row>
 
-    <!-- Rodapé com endereço e telefone do salão -->
+    <!-- Rodapé -->
     <v-divider></v-divider>
     <v-row class="mt-3" justify="center" align="center" style="font-size: 0.875rem; color: #555;">
       <v-col cols="12" class="text-center">
@@ -157,38 +171,16 @@
 
 <script setup lang="ts">
 import { defineProps } from 'vue'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 const props = defineProps<{
   dados: {
-    salao?: {
-      nome?: string
-      endereco?: string
-      telefone?: string
-    }
-    venda: {
-      id: number
-      dataVenda: string
-      valorTotal: number | string
-      observacoes?: string | null
-    }
-    cliente: {
-      nome: string
-      telefone?: string | null
-      email?: string | null
-    }
-    servicos: Array<{
-      nome: string
-      preco: number | string
-      funcionario?: {
-        nome: string
-        funcao: string
-      } | null
-    }>
-    produtos: Array<{
-      nome: string
-      preco: number | string
-      quantidade: number
-    }>
+    salao?: { nome?: string; endereco?: string; telefone?: string }
+    venda: { id: number; dataVenda: string; valorTotal: number | string; observacoes?: string | null }
+    cliente: { nome: string; telefone?: string | null; email?: string | null }
+    servicos: Array<{ nome: string; preco: number | string; funcionario?: { nome: string; funcao: string } | null }>
+    produtos: Array<{ nome: string; preco: number | string; quantidade: number }>
     metodoPagamento: string
   }
 }>()
@@ -207,8 +199,98 @@ function formatarValor(valor: number | string) {
   if (isNaN(valor)) return '0,00'
   return valor.toFixed(2).replace('.', ',')
 }
+
+// EXPORTAR PDF COM DETALHES DO SALÃO E AGRADECIMENTO
+const exportarPDF = () => {
+  const doc = new jsPDF()
+
+  // Detalhes do salão
+  doc.setFontSize(16)
+  doc.text(props.dados.salao?.nome || 'Nome do Salão', 14, 18)
+  doc.setFontSize(12)
+  doc.text(`Endereço: ${props.dados.salao?.endereco || '-'}`, 14, 26)
+  doc.text(`Telefone: ${props.dados.salao?.telefone || '-'}`, 14, 34)
+
+  // Cabeçalho venda
+  doc.setFontSize(14)
+  doc.text(`Recibo de Venda #${props.dados.venda.id}`, 14, 46)
+  doc.setFontSize(12)
+  doc.text(`Data: ${formatarData(props.dados.venda.dataVenda)}`, 14, 54)
+  doc.text(`Cliente: ${props.dados.cliente.nome}`, 14, 62)
+  doc.text(`Telefone: ${props.dados.cliente.telefone || '-'}`, 14, 70)
+  doc.text(`Email: ${props.dados.cliente.email || '-'}`, 14, 78)
+
+  // Serviços
+  let startY = 86
+  if (props.dados.servicos.length) {
+    autoTable(doc, {
+      head: [['Serviço', 'Preço', 'Funcionário', 'Função']],
+      body: props.dados.servicos.map(s => [
+        s.nome,
+        parseFloat(s.preco).toFixed(2),
+        s.funcionario?.nome || '-',
+        s.funcionario?.funcao || '-'
+      ]),
+      startY
+    })
+    startY = doc.lastAutoTable.finalY + 10
+  }
+
+  // Produtos
+  if (props.dados.produtos.length) {
+    autoTable(doc, {
+      head: [['Produto', 'Preço', 'Qtd']],
+      body: props.dados.produtos.map(p => [
+        p.nome,
+        parseFloat(p.preco).toFixed(2),
+        p.quantidade
+      ]),
+      startY
+    })
+    startY = doc.lastAutoTable.finalY + 10
+  }
+
+  // Pagamento e total
+  doc.text(`Método de Pagamento: ${props.dados.metodoPagamento || '-'}`, 14, startY)
+  startY += 8
+  doc.text(`Total: Kz ${formatarValor(props.dados.venda.valorTotal)}`, 14, startY)
+  startY += 8
+
+  // Observações
+  if (props.dados.venda.observacoes) {
+    doc.text('Observações:', 14, startY)
+    doc.text(props.dados.venda.observacoes, 14, startY + 6)
+    startY += 14
+  }
+
+  // Agradecimento ao cliente
+  doc.setFontSize(12)
+  doc.setTextColor(74, 20, 140) // roxo
+  doc.text('Obrigado por escolher nosso salão! Sua beleza é nossa inspiração.', 14, startY + 10)
+  doc.text('Esperamos vê-lo(a) novamente em breve!', 14, startY + 16)
+
+  doc.save(`recibo-venda-${props.dados.venda.id}.pdf`)
+}
+
+// EXPORTAR CSV
+const exportarCSV = () => {
+  let csv = 'Tipo,Nome,Preço,Funcionário/Função,Quantidade\n'
+  props.dados.servicos.forEach(s => {
+    csv += `Serviço,${s.nome},${formatarValor(s.preco)},${s.funcionario?.nome || '-'} / ${s.funcionario?.funcao || '-'},-\n`
+  })
+  props.dados.produtos.forEach(p => {
+    csv += `Produto,${p.nome},${formatarValor(p.preco)},-,-,${p.quantidade}\n`
+  })
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.setAttribute('download', `recibo-venda-${props.dados.venda.id}.csv`)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
 </script>
 
 <style scoped>
-/* Estilos opcionais */
+/* Nenhum estilo adicional necessário */
 </style>

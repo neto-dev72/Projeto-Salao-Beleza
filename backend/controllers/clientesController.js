@@ -1286,6 +1286,34 @@ router.get('/agendamentos/:id/ficha', async (req, res) => {
 
 
 
+// DELETE /agendamentos/:id
+router.delete('/agendamentos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Busca o agendamento
+    const agendamento = await Agendamento.findByPk(id);
+    if (!agendamento) {
+      return res.status(404).json({ erro: 'Agendamento não encontrado' });
+    }
+
+    // Remove registros relacionados
+    await AgendamentoServico.destroy({ where: { AgendamentoId: id } });
+    await AgendamentoProduto.destroy({ where: { AgendamentoId: id } });
+
+    // Remove o agendamento principal
+    await agendamento.destroy();
+
+    res.json({ mensagem: 'Agendamento removido com sucesso' });
+  } catch (err) {
+    console.error('Erro ao deletar agendamento:', err);
+    res.status(500).json({ erro: 'Erro ao deletar agendamento' });
+  }
+});
+
+
+
+
 
 router.get('/contador-agendamentos', auth, async (req, res) => {
   try {

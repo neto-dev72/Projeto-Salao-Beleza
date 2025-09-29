@@ -1,10 +1,12 @@
 <template>
   <v-container fluid class="py-6 px-4 bg-blue-grey-lighten-5">
-    <!-- Título -->
+    <!-- Cabeçalho / Título -->
     <v-card elevation="3" class="pa-6 mb-8 rounded-xl bg-white">
       <div class="d-flex align-center mb-6">
         <v-icon icon="mdi-account-group" size="36" class="me-3 text-primary" />
-        <h2 class="text-h5 font-weight-bold text-primary">Relatório de Funcionários</h2>
+        <h2 class="text-h5 font-weight-bold text-primary">
+          Relatório de Funcionários
+        </h2>
       </div>
 
       <!-- Filtros -->
@@ -55,13 +57,25 @@
     <!-- Resultados -->
     <v-expand-transition>
       <div v-if="relatorioGerado">
-        <h3 class="text-h6 font-weight-bold mb-4 text-blue-darken-3">
-          Resultados para:
-          <v-chip color="blue lighten-4" text-color="primary" class="ml-2">
-            <v-icon start icon="mdi-calendar-month" />
-            {{ periodoSelecionado }}
-          </v-chip>
-        </h3>
+        <div class="d-flex justify-space-between align-center mb-4">
+          <h3 class="text-h6 font-weight-bold text-blue-darken-3">
+            Resultados para:
+            <v-chip color="blue lighten-4" text-color="primary" class="ml-2">
+              <v-icon start icon="mdi-calendar-month" />
+              {{ periodoSelecionado }}
+            </v-chip>
+          </h3>
+          <v-btn
+            v-if="dadosRelatorio.length"
+            color="red-darken-1"
+            class="text-white"
+            rounded="xl"
+            prepend-icon="mdi-file-pdf-box"
+            @click="exportarPDF"
+          >
+            Exportar PDF
+          </v-btn>
+        </div>
 
         <v-row dense>
           <v-col
@@ -72,7 +86,6 @@
             lg="4"
           >
             <v-card elevation="4" class="pa-5 rounded-2xl bg-white">
-              <!-- Header com nome do funcionário -->
               <div class="d-flex align-center mb-4">
                 <v-avatar size="48" color="blue lighten-3">
                   <v-icon icon="mdi-account-tie" />
@@ -85,36 +98,46 @@
                 </div>
               </div>
 
-              <!-- Detalhes do atendimento -->
               <v-divider class="mb-3" />
 
               <v-row dense>
                 <v-col cols="12" class="d-flex justify-space-between mb-2">
-                  <span class="text-caption text-blue-grey-darken-1">Total de Atendimentos</span>
-                  <span class="text-body-1 font-weight-bold text-primary">{{ item.atendimentos }}</span>
+                  <span class="text-caption text-blue-grey-darken-1">
+                    Total de Atendimentos
+                  </span>
+                  <span class="text-body-1 font-weight-bold text-primary">
+                    {{ item.atendimentos }}
+                  </span>
                 </v-col>
                 <v-col cols="12" class="d-flex justify-space-between mb-2">
-                  <span class="text-caption text-blue-grey-darken-1">Receita Total</span>
+                  <span class="text-caption text-blue-grey-darken-1">
+                    Receita Total
+                  </span>
                   <span class="text-body-1 font-weight-bold text-green-darken-2">
                     {{ formatarValor(item.receitaTotal) }}
                   </span>
                 </v-col>
-                <v-col cols="12" class="d-flex justify-space-between">
-                  <span class="text-caption text-blue-grey-darken-1">Status</span>
+                <v-col cols="12" class="d-flex justify-space-between mb-2">
+                  <span class="text-caption text-blue-grey-darken-1">
+                    Status
+                  </span>
                   <span class="text-body-1 font-weight-bold text-amber-darken-3">
                     {{ item.status }}
                   </span>
                 </v-col>
                 <v-col cols="12" class="d-flex justify-space-between">
-                  <span class="text-caption text-blue-grey-darken-1">Último Atendimento</span>
-                  <span class="text-body-1">{{ item.ultimoAtendimento }}</span>
+                  <span class="text-caption text-blue-grey-darken-1">
+                    Último Atendimento
+                  </span>
+                  <span class="text-body-1">
+                    {{ item.ultimoAtendimento }}
+                  </span>
                 </v-col>
               </v-row>
             </v-card>
           </v-col>
         </v-row>
 
-        <!-- Nenhum dado -->
         <v-alert
           type="info"
           v-if="!dadosRelatorio.length"
@@ -128,10 +151,12 @@
   </v-container>
 </template>
 
-
 <script lang="ts">
 import { defineComponent, ref, onMounted } from 'vue'
 import axios from 'axios'
+import dayjs from 'dayjs'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 export default defineComponent({
   name: 'RelatorioFuncionarios',
@@ -145,14 +170,13 @@ export default defineComponent({
 
     const periodos = [
       'Hoje',
-      'Esta Semana',
-      'Este Mês',
-      'Últimos 30 dias',
-      'Trimestre Atual',
-      'Personalizado'
+      'Semana',
+      'Mês',
+      'Trimestre',
+      'Semestre',
+      'Ano'
     ]
 
-    // Carregar funcionários ao montar a página
     onMounted(async () => {
       try {
         const res = await axios.get('/funcionarios')
@@ -162,48 +186,40 @@ export default defineComponent({
       }
     })
 
-    // Calcular o intervalo de datas com base no período selecionado
-    function calcularDatas() {
-      const hoje = new Date()
-      let inicio: Date
-      const fim: Date = new Date()
+    function calcularPeriodo() {
+      const agora = dayjs()
+      let inicio: dayjs.Dayjs
+      const fim: dayjs.Dayjs = agora.endOf('day')
 
       switch (periodoSelecionado.value) {
         case 'Hoje':
-          inicio = new Date(hoje)
+          inicio = agora.startOf('day')
           break
-        case 'Esta Semana':
-          const dia = hoje.getDay()
-          inicio = new Date(hoje)
-          inicio.setDate(hoje.getDate() - dia)
+        case 'Semana':
+          inicio = agora.subtract(6, 'day').startOf('day') // últimos 7 dias
           break
-        case 'Este Mês':
-          inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+        case 'Mês':
+          inicio = agora.subtract(1, 'month').startOf('day') // últimos 30 dias
           break
-        case 'Últimos 30 dias':
-          inicio = new Date(hoje)
-          inicio.setDate(hoje.getDate() - 30)
+        case 'Trimestre':
+          inicio = agora.subtract(3, 'month').startOf('day') // últimos 3 meses
           break
-        case 'Trimestre Atual':
-          const mes = hoje.getMonth()
-          const trimestre = Math.floor(mes / 3)
-          inicio = new Date(hoje.getFullYear(), trimestre * 3, 1)
+        case 'Semestre':
+          inicio = agora.subtract(6, 'month').startOf('day') // últimos 6 meses
           break
-        case 'Personalizado':
-          inicio = new Date(hoje)
+        case 'Ano':
+          inicio = agora.startOf('year')
           break
         default:
-          inicio = new Date(hoje)
-          break
+          inicio = agora.startOf('month')
       }
 
       return {
-        inicio: inicio.toISOString().slice(0, 10),
-        fim: fim.toISOString().slice(0, 10)
+        startDate: inicio.format('YYYY-MM-DD'),
+        endDate: fim.format('YYYY-MM-DD')
       }
     }
 
-    // Função para gerar o relatório
     async function gerarRelatorio() {
       relatorioGerado.value = false
       carregando.value = true
@@ -215,43 +231,60 @@ export default defineComponent({
         return
       }
 
-      const periodoMap: Record<string, string> = {
-        'Hoje': 'hoje',
-        'Esta Semana': 'semana',
-        'Este Mês': 'mes',
-        'Últimos 30 dias': 'personalizado',
-        'Trimestre Atual': 'trimestre',
-        'Personalizado': 'personalizado'
-      }
-
-      const periodo = periodoMap[periodoSelecionado.value]
-      const { inicio, fim } = calcularDatas()
+      const { startDate, endDate } = calcularPeriodo()
 
       try {
-        const queryParams = new URLSearchParams({
-          periodo,
-          inicio,
-          fim,
-          funcionarios: funcionariosSelecionados.value.join(',')
+        const res = await axios.get('/relatorio/funcionarios', {
+          params: {
+            startDate,
+            endDate,
+            funcionarios: funcionariosSelecionados.value.join(',')
+          }
         })
-
-        const res = await axios.get(`/relatorio/funcionarios?${queryParams.toString()}`)
         dadosRelatorio.value = res.data
         relatorioGerado.value = true
       } catch (err) {
-        console.error('Erro ao gerar o relatório', err)
+        console.error('Erro ao gerar relatório', err)
       } finally {
         carregando.value = false
       }
     }
 
-    // Função para formatar os valores em moeda
     function formatarValor(valor: number) {
       if (isNaN(valor)) return 'N/A'
       return new Intl.NumberFormat('pt-AO', {
         style: 'currency',
         currency: 'AOA'
       }).format(valor)
+    }
+
+    function exportarPDF() {
+      if (!dadosRelatorio.value.length) return
+      const doc = new jsPDF()
+      doc.setFontSize(16)
+      doc.text('Relatório de Funcionários', 14, 18)
+      doc.setFontSize(12)
+      doc.text(`Período: ${periodoSelecionado.value}`, 14, 28)
+
+      const rows: any[] = []
+      dadosRelatorio.value.forEach((f: any) => {
+        rows.push([
+          f.nome,
+          f.funcao,
+          f.atendimentos,
+          formatarValor(f.receitaTotal),
+          f.status,
+          f.ultimoAtendimento
+        ])
+      })
+
+      autoTable(doc, {
+        head: [['Nome', 'Função', 'Atendimentos', 'Receita Total', 'Status', 'Último Atendimento']],
+        body: rows,
+        startY: 40
+      })
+
+      doc.save(`relatorio-funcionarios-${new Date().toISOString()}.pdf`)
     }
 
     return {
@@ -262,10 +295,17 @@ export default defineComponent({
       relatorioGerado,
       carregando,
       periodos,
-      calcularDatas,
       gerarRelatorio,
-      formatarValor
+      formatarValor,
+      exportarPDF
     }
   }
 })
 </script>
+
+<style scoped>
+.custom-autocomplete .v-chip {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+</style>

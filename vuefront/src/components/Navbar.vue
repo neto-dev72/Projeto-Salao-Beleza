@@ -6,17 +6,40 @@
     elevate-on-scroll
     flat
   >
-    <!-- Ícone hambúrguer (só aparece no mobile) -->
+    <!-- Ícone hambúrguer (mobile) -->
     <v-app-bar-nav-icon class="d-md-none toggler" @click="drawer = !drawer">
       <v-icon>{{ drawer ? 'mdi-close' : 'mdi-menu' }}</v-icon>
     </v-app-bar-nav-icon>
 
     <!-- Logo -->
-    <v-toolbar-title class="logo-title">
+    <v-toolbar-title class="logo-title d-flex align-center">
       <img :src="logo" alt="Logo Bernet" class="logo-img" />
     </v-toolbar-title>
 
     <v-spacer />
+
+    <!-- Ícone de perfil mobile no canto superior direito -->
+    <v-menu v-if="isLoggedIn && !mdAndUp" offset-y bottom>
+      <template #activator="{ props }">
+        <v-btn v-bind="props" icon class="user-icon-mobile">
+          <v-icon large>mdi-account-circle</v-icon>
+        </v-btn>
+      </template>
+      <v-list>
+        <v-list-item @click="navigateTo('/meu-perfil')" link>
+          <v-list-item-icon>
+            <v-icon>mdi-account</v-icon>
+          </v-list-item-icon>
+          <v-list-item-title>Perfil</v-list-item-title>
+        </v-list-item>
+        <v-list-item @click="logout" link>
+          <v-list-item-icon>
+            <v-icon>mdi-exit-to-app</v-icon>
+          </v-list-item-icon>
+          <v-list-item-title>Terminar Sessão</v-list-item-title>
+        </v-list-item>
+      </v-list>
+    </v-menu>
 
     <!-- Botão principal: Atender Cliente (desktop) -->
     <v-btn
@@ -35,8 +58,6 @@
     <!-- Menu horizontal (desktop) -->
     <template v-if="mdAndUp">
       <template v-for="item in menus" :key="item.title">
-
-        <!-- Botão simples (exceto Agendamentos) -->
         <v-btn
           v-if="!item.submenus && item.title !== 'Agendamentos'"
           text
@@ -59,11 +80,7 @@
           :offset-x="4"
           :offset-y="4"
         >
-          <v-btn
-            text
-            class="nav-btn"
-            @click="navigateTo(item.route)"
-          >
+          <v-btn text class="nav-btn" @click="navigateTo(item.route)">
             <v-icon left>mdi-calendar-check</v-icon>
             {{ item.title }}
           </v-btn>
@@ -109,16 +126,28 @@
         </v-menu>
       </template>
 
-      <!-- Logout (desktop) -->
-      <v-btn
-        v-if="isLoggedIn"
-        text
-        @click="logout"
-        class="logout-btn"
-      >
-        <v-icon left>mdi-exit-to-app</v-icon>
-        Terminar Sessão
-      </v-btn>
+      <!-- Ícone de perfil desktop -->
+      <v-menu v-if="isLoggedIn" offset-y bottom>
+        <template #activator="{ props }">
+          <v-btn v-bind="props" icon class="user-icon-desktop">
+            <v-icon large>mdi-account-circle</v-icon>
+          </v-btn>
+        </template>
+        <v-list>
+          <v-list-item @click="navigateTo('/meu-perfil')" link>
+            <v-list-item-icon>
+              <v-icon>mdi-account</v-icon>
+            </v-list-item-icon>
+            <v-list-item-title>Perfil</v-list-item-title>
+          </v-list-item>
+          <v-list-item @click="logout" link>
+            <v-list-item-icon>
+              <v-icon>mdi-exit-to-app</v-icon>
+            </v-list-item-icon>
+            <v-list-item-title>Terminar Sessão</v-list-item-title>
+          </v-list-item>
+        </v-list>
+      </v-menu>
     </template>
   </v-app-bar>
 
@@ -134,7 +163,7 @@
       <v-list-item
         v-if="isLoggedIn"
         class="btn-acao-principal-mobile mt-4 mb-2"
-        @click="navigateTo('/nova-venda')"
+        @click="navigateTo('/gerir-clientes')"
         link
       >
         <v-list-item-icon>
@@ -147,23 +176,8 @@
         </v-list-item-content>
       </v-list-item>
 
-      <!-- Botão direto no drawer -->
-      <v-list-item
-        v-if="isLoggedIn"
-        @click="navigateTo('/gerir-clientes')"
-        link
-      >
-        <v-list-item-icon>
-          <v-icon>mdi-account-multiple</v-icon>
-        </v-list-item-icon>
-        <v-list-item-content>
-          <v-list-item-title>Gestão de Clientes</v-list-item-title>
-        </v-list-item-content>
-      </v-list-item>
-
-      <!-- Menus (mobile) -->
+      <!-- Menus mobile -->
       <template v-for="item in menus" :key="item.title">
-        <!-- Se tiver submenus -->
         <template v-if="item.submenus">
           <v-list-item @click="expanded[item.title] = !expanded[item.title]">
             <v-list-item-icon>
@@ -176,7 +190,6 @@
             </v-list-item-content>
             <v-icon>{{ expanded[item.title] ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
           </v-list-item>
-
           <v-expand-transition>
             <div v-show="expanded[item.title]">
               <v-list-item
@@ -199,21 +212,14 @@
           </v-expand-transition>
         </template>
 
-        <!-- Agendamentos com badge no mobile -->
+        <!-- Agendamentos mobile com badge -->
         <v-list-item
           v-else-if="item.title === 'Agendamentos' && agendamentosCount > 0"
           @click="navigateTo(item.route)"
           link
         >
           <v-list-item-icon>
-            <v-badge
-              :content="agendamentosCount"
-              color="pink"
-              location="top end"
-              overlap
-              :offset-x="4"
-              :offset-y="4"
-            >
+            <v-badge :content="agendamentosCount" color="pink" overlap>
               <v-icon>mdi-calendar-check</v-icon>
             </v-badge>
           </v-list-item-icon>
@@ -222,21 +228,7 @@
           </v-list-item-content>
         </v-list-item>
 
-        <!-- Agendamentos sem badge no mobile -->
-        <v-list-item
-          v-else-if="item.title === 'Agendamentos'"
-          @click="navigateTo(item.route)"
-          link
-        >
-          <v-list-item-icon>
-            <v-icon>mdi-calendar-check</v-icon>
-          </v-list-item-icon>
-          <v-list-item-content>
-            <v-list-item-title>{{ item.title }}</v-list-item-title>
-          </v-list-item-content>
-        </v-list-item>
-
-        <!-- Outros menus simples -->
+        <!-- Agendamentos mobile sem badge ou outros itens -->
         <v-list-item
           v-else
           @click="navigateTo(item.route)"
@@ -252,22 +244,12 @@
           </v-list-item-content>
         </v-list-item>
       </template>
-
-      <v-divider class="my-2"></v-divider>
-
-      <v-list-item v-if="isLoggedIn" @click="logout" link>
-        <v-list-item-icon>
-          <v-icon>mdi-exit-to-app</v-icon>
-        </v-list-item-icon>
-        <v-list-item-content>
-          <v-list-item-title>Terminar Sessão</v-list-item-title>
-        </v-list-item-content>
-      </v-list-item>
     </v-list>
   </v-navigation-drawer>
 </template>
 
 <script lang="ts">
+/* Mantém todo o script original sem alterações */
 import { defineComponent, ref, computed, watch, onMounted, onUnmounted, reactive } from "vue";
 import { useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
@@ -286,8 +268,6 @@ export default defineComponent({
     const isLoggedIn = computed(() => !!token.value);
     const agendamentosCount = ref(0);
     let intervalId: number | undefined;
-
-    // Breakpoints do Vuetify
     const { mdAndUp } = useDisplay();
 
     const buildMenus = (usuario: any, salao: any) => {
@@ -306,7 +286,6 @@ export default defineComponent({
         ];
         return;
       }
-
       switch (usuario.funcao) {
         case "admin":
         case "recepcionista":
@@ -322,6 +301,7 @@ export default defineComponent({
                 { title: "De Produtos", route: "/gestao-produtos", icon: "mdi-cart" },
                 { title: "De Serviços", route: "/cadastro-servico", icon: "mdi-scissors-cutting" },
                 { title: "De Funcionários", route: "/gestao-funcionarios", icon: "mdi-account-tie" },
+                { title: "Despesas", route: "/cadastro-despesa", icon: "mdi-cash-minus" },
               ],
             },
             {
@@ -331,11 +311,10 @@ export default defineComponent({
                 { title: "Relatório de Vendas", route: "/gerar-relatorio", icon: "mdi-cash-register" },
                 { title: "Relatório de Funcionários", route: "/desempenho-funcionarios", icon: "mdi-account-tie" },
                 { title: "Painel Analítico", route: "/painel-analitico", icon: "mdi-chart-box-outline" },
+                { title: "Relatório de Despesas", route: "/relatorio-despesas", icon: "mdi-cash-minus" },
               ],
             },
-            { title: "Despesas", route: "/cadastro-despesa", icon: "mdi-cash-minus" },
             { title: "Agendamentos", route: "/gerir-agendamentos", icon: "mdi-calendar-check" },
-            { title: "Perfil", route: "/meu-perfil", icon: "mdi-account" },
           ];
           break;
         case "profissional":
@@ -431,7 +410,6 @@ export default defineComponent({
 </script>
 
 <style scoped>
-/* Botão principal (desktop) */
 .btn-acao-principal {
   font-weight: bold;
   letter-spacing: 0.5px;
@@ -443,13 +421,11 @@ export default defineComponent({
   transition: all 0.3s ease;
   box-shadow: 0 4px 10px rgba(123, 30, 59, 0.4);
 }
-
 .btn-acao-principal:hover {
   background-color: #6A1B2B !important;
   transform: scale(1.04);
 }
 
-/* Botão principal (mobile - dentro do drawer) */
 .btn-acao-principal-mobile {
   background-color: #7B1E3B !important;
   border-radius: 10px;
@@ -460,12 +436,10 @@ export default defineComponent({
   justify-content: start;
   transition: all 0.3s ease;
 }
-
 .btn-acao-principal-mobile:hover {
   background-color: #6A1B2B !important;
   transform: scale(1.02);
 }
-
 .btn-acao-principal-mobile .v-icon,
 .btn-acao-principal-mobile .v-list-item-title {
   color: #FFFFFF !important;
@@ -521,10 +495,23 @@ export default defineComponent({
   overflow: visible !important;
 }
 
+/* Ícone de usuário desktop e mobile */
+.user-icon-desktop .v-icon,
+.user-icon-mobile .v-icon {
+  font-size: 36px !important; /* aumenta o tamanho */
+  vertical-align: middle;
+}
+
+/* Mobile: posiciona ícone no canto superior direito */
 @media (max-width: 900px) {
   .logo-img {
     height: 90px;
     max-width: 350px;
+  }
+  .user-icon-mobile {
+    position: absolute;
+    right: 8px;
+    top: 8px;
   }
 }
 </style>

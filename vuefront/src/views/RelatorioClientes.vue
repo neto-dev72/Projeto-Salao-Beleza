@@ -1,158 +1,172 @@
 <template>
-  <v-container>
-    <v-card class="pa-6" elevation="6">
-      <v-card-title class="headline font-weight-bold">
-        Relatório de Clientes
-      </v-card-title>
+  <v-container fluid class="py-6 px-4 bg-blue-grey-lighten-5">
+    <!-- Título -->
+    <v-card elevation="3" class="pa-6 mb-8 rounded-xl bg-white">
+      <div class="d-flex align-center mb-6">
+        <v-icon icon="mdi-account" size="36" class="me-3 text-primary" />
+        <h2 class="text-h5 font-weight-bold text-primary">Relatório de Clientes</h2>
+      </div>
 
-      <v-card-text>
-        <v-row dense>
-          <!-- Seleção de Clientes -->
-          <v-col cols="12" sm="12" md="6">
-            <v-autocomplete
-              v-model="clientesSelecionados"
-              :items="clientes"
-              item-title="nome"
-              item-value="id"
-              label="Selecione os Clientes"
-              multiple
-              clearable
-              outlined
-              dense
-              chips
-            />
-          </v-col>
+      <!-- Filtro de Clientes -->
+      <v-row dense class="mb-4">
+        <v-col cols="12" sm="12">
+          <v-autocomplete
+            v-model="clientesSelecionados"
+            :items="clientes"
+            item-title="nome"
+            item-value="id"
+            label="Selecionar Clientes"
+            multiple
+            chips
+            prepend-icon="mdi-account-multiple"
+            variant="outlined"
+            density="comfortable"
+            class="custom-autocomplete"
+          />
+        </v-col>
+      </v-row>
 
-          <!-- Seleção de Período -->
-          <v-col cols="12" sm="12" md="6">
-            <v-select
-              v-model="periodoSelecionado"
-              :items="periodos"
-              item-title="label"
-              item-value="value"
-              label="Selecione o Período"
-              outlined
-              dense
-              clearable
-            />
-          </v-col>
-        </v-row>
-
+      <!-- Botão Gerar Relatório -->
+      <div class="text-end mt-4">
         <v-btn
+          :loading="carregando"
           color="primary"
-          class="mt-4"
-          :disabled="!clientesSelecionados.length || !periodoSelecionado"
+          size="large"
+          class="rounded-lg"
+          prepend-icon="mdi-file-chart"
           @click="gerarRelatorio"
         >
           Gerar Relatório
         </v-btn>
-
-        <v-divider class="my-6"></v-divider>
-
-        <v-simple-table v-if="relatorio.length">
-          <thead>
-            <tr>
-              <th>Cliente</th>
-              <th>Total Serviços (Kz)</th>
-              <th>Total Produtos (Kz)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in relatorio" :key="item.clienteId">
-              <td>{{ item.nome }}</td>
-              <td>{{ formatarValor(item.totalServicos) }}</td>
-              <td>{{ formatarValor(item.totalProdutos) }}</td>
-            </tr>
-          </tbody>
-        </v-simple-table>
-
-        <v-alert
-          v-else-if="relatorioGerado"
-          type="info"
-          class="mt-4"
-        >
-          Nenhum resultado encontrado para os filtros aplicados.
-        </v-alert>
-      </v-card-text>
+      </div>
     </v-card>
+
+    <!-- Resultados -->
+    <v-expand-transition>
+      <div v-if="relatorioGerado">
+        <h3 class="text-h6 font-weight-bold mb-4 text-blue-darken-3">
+          Resultados para os Clientes Selecionados:
+        </h3>
+
+        <v-row dense>
+          <v-col
+            v-for="(item, index) in dadosRelatorio"
+            :key="index"
+            cols="12"
+            md="6"
+            lg="4"
+          >
+            <v-card elevation="4" class="pa-5 rounded-2xl bg-white">
+              <!-- Nome do Cliente -->
+              <div class="d-flex align-center mb-4">
+                <v-avatar size="48" color="blue lighten-3">
+                  <v-icon icon="mdi-account-tie" />
+                </v-avatar>
+                <div class="ml-4">
+                  <h4 class="text-subtitle-1 font-weight-bold mb-1 text-blue-darken-3">
+                    {{ item.nome }}
+                  </h4>
+                </div>
+              </div>
+
+              <!-- Detalhes do Relatório -->
+              <v-divider class="mb-3" />
+
+              <v-row dense>
+                <v-col cols="12" class="d-flex justify-space-between mb-2">
+                  <span class="text-caption text-blue-grey-darken-1">Total Gasto</span>
+                  <span class="text-body-1 font-weight-bold text-green-darken-2">
+                    {{ formatarValor(item.totalGasto) }}
+                  </span>
+                </v-col>
+              </v-row>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <!-- Nenhum dado -->
+        <v-alert
+          type="info"
+          v-if="!dadosRelatorio.length"
+          class="mt-4"
+          icon="mdi-information-outline"
+        >
+          Nenhum resultado para os filtros aplicados.
+        </v-alert>
+      </div>
+    </v-expand-transition>
   </v-container>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref } from 'vue'
+import { defineComponent, ref, onMounted } from 'vue'
 import axios from 'axios'
-
-interface Cliente {
-  id: number
-  nome: string
-}
-
-interface ResultadoRelatorio {
-  clienteId: number
-  nome: string
-  totalServicos: number | string
-  totalProdutos: number | string
-}
 
 export default defineComponent({
   name: 'RelatorioClientes',
   setup() {
-    const clientes = ref<Cliente[]>([])
     const clientesSelecionados = ref<number[]>([])
-    const periodoSelecionado = ref<string | null>(null)
-    const relatorio = ref<ResultadoRelatorio[]>([])
+    const clientes = ref<any[]>([])
+    const dadosRelatorio = ref<any[]>([])
     const relatorioGerado = ref(false)
+    const carregando = ref(false)
 
-    const periodos = [
-      { label: 'Hoje', value: 'hoje' },
-      { label: 'Esta Semana', value: 'semana' },
-      { label: 'Este Mês', value: 'mes' },
-      { label: 'Este Trimestre', value: 'trimestre' },
-      { label: 'Este Semestre', value: 'semestre' },
-      { label: 'Este Ano', value: 'ano' }
-    ]
-
-    const carregarClientes = async () => {
+    // Carregar clientes ao montar a página
+    onMounted(async () => {
       try {
-        const { data } = await axios.get('/clientes')
-        clientes.value = data
+        const res = await axios.get('/clientes')
+        clientes.value = res.data
       } catch (err) {
-        console.error(err)
-        alert('Erro ao carregar clientes.')
+        console.error('Erro ao carregar clientes', err)
       }
-    }
+    })
 
-    const gerarRelatorio = async () => {
+    // Função para gerar o relatório
+    async function gerarRelatorio() {
+      relatorioGerado.value = false
+      carregando.value = true
+
+      if (!clientesSelecionados.value.length) {
+        dadosRelatorio.value = []
+        carregando.value = false
+        relatorioGerado.value = true
+        return
+      }
+
       try {
-        const { data } = await axios.post('/relatorio-clientes', {
-          clientesIds: clientesSelecionados.value,
-          periodo: periodoSelecionado.value
+        const queryParams = new URLSearchParams({
+          clientes: clientesSelecionados.value.join(','),
         })
 
-        relatorio.value = data.resultados || []
+        const res = await axios.get(`http://localhost:9000/relatorio/clientes?${queryParams.toString()}`);
+dadosRelatorio.value = res.data;
+console.log("Dados do relatório", dadosRelatorio.value);
+
         relatorioGerado.value = true
-      } catch (err: any) {
-        console.error(err)
-        alert('Erro ao gerar relatório: ' + (err.response?.data?.erro || err.message))
+      } catch (err) {
+        console.error('Erro ao gerar o relatório', err)
+      } finally {
+        carregando.value = false
       }
     }
 
-    const formatarValor = (valor: number | string) => {
-      const num = typeof valor === 'string' ? parseFloat(valor) : valor
-      return num.toFixed(2)
+    // Função para formatar os valores em moeda
+    function formatarValor(valor: number) {
+      if (isNaN(valor)) return 'N/A'
+      return new Intl.NumberFormat('pt-AO', {
+        style: 'currency',
+        currency: 'AOA'
+      }).format(valor)
     }
 
-    carregarClientes()
-
     return {
-      clientes,
       clientesSelecionados,
-      periodoSelecionado,
-      periodos,
+      clientes,
+      dadosRelatorio,
+      relatorioGerado,
+      carregando,
       gerarRelatorio,
-      relatorio,
-      formatarValor,
-      relatorioGerado
+      formatarValor
     }
   }
 })

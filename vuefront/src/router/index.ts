@@ -38,6 +38,10 @@ import Resumo from '../views/Resumo.vue'
 import RelatorioClientes from '../views/RelatorioClientes.vue'
 
 
+
+import RelatorioDespesas from '../views/RelatorioDespesas.vue'
+
+
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
@@ -143,6 +147,12 @@ const routes: Array<RouteRecordRaw> = [
     path: '/relatorio-clientes',
     name: 'RelatorioClientes',
     component: RelatorioClientes,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/relatorio-despesas',
+    name: 'RelatorioDespesas',
+    component: RelatorioDespesas,
     meta: { requiresAuth: true }
   }
 ]

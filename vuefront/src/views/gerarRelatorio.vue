@@ -12,7 +12,7 @@
         <v-icon size="48" color="blue-grey" class="mb-3">mdi-chart-bar</v-icon>
         <h2 class="text-h4 font-weight-bold mb-2">Relatório de Serviços e Produtos</h2>
         <p class="text-body-1 text-blue-grey">
-          Visualize o desempenho dos serviços e produtos prestados com filtros inteligentes e gráficos resumidos.
+          Visualize o desempenho financeiro de serviços e produtos em um período escolhido.
         </p>
       </div>
 
@@ -21,25 +21,25 @@
         <v-col cols="12">
           <h3 class="text-subtitle-1 font-weight-bold mb-1">Filtros do Relatório</h3>
           <p class="text-body-2 text-blue-grey">
-            Escolha o período, os serviços e produtos desejados para gerar um relatório personalizado.
+            Escolha o período, selecione serviços/produtos ou gere um relatório geral.
           </p>
         </v-col>
 
+        <!-- Seleção de Período -->
         <v-col cols="12" md="4">
           <v-select
-            v-model="periodo"
+            v-model="periodoSelecionado"
             :items="periodos"
             label="Período"
+            prepend-icon="mdi-calendar-range"
             variant="outlined"
             density="comfortable"
-            clearable
-            prepend-inner-icon="mdi-calendar-range"
             color="light-blue"
           />
         </v-col>
 
         <!-- Seleção de Serviços -->
-        <v-col cols="12" md="8">
+        <v-col cols="12" md="4">
           <v-select
             v-model="servicoIds"
             :items="servicos"
@@ -52,6 +52,7 @@
             density="comfortable"
             prepend-inner-icon="mdi-scissors-cutting"
             color="light-blue"
+            :disabled="relatorioGeral"
           >
             <template #append>
               <v-tooltip text="Selecionar todos os serviços">
@@ -66,7 +67,7 @@
         </v-col>
 
         <!-- Seleção de Produtos -->
-        <v-col cols="12" md="8">
+        <v-col cols="12" md="4">
           <v-select
             v-model="produtoIds"
             :items="produtos"
@@ -79,6 +80,7 @@
             density="comfortable"
             prepend-inner-icon="mdi-cube"
             color="purple-lighten-4"
+            :disabled="relatorioGeral"
           >
             <template #append>
               <v-tooltip text="Selecionar todos os produtos">
@@ -92,13 +94,22 @@
           </v-select>
         </v-col>
 
-        <v-col cols="12" class="d-flex align-center">
+        <!-- Opções Extras -->
+        <v-col cols="12" class="d-flex flex-wrap align-center">
           <v-checkbox
             v-model="incluirDespesas"
-            label="Incluir despesas no relatório"
+            label="Incluir despesas"
             density="comfortable"
             prepend-icon="mdi-cash-refund"
             color="blue"
+            class="mr-6"
+          />
+          <v-checkbox
+            v-model="relatorioGeral"
+            label="Relatório Geral (ignorar filtros)"
+            density="comfortable"
+            prepend-icon="mdi-chart-areaspline"
+            color="green"
           />
         </v-col>
 
@@ -109,7 +120,7 @@
             color="light-blue"
             class="text-white mt-4"
             @click="gerarRelatorio"
-            :disabled="!periodo || (servicoIds.length === 0 && produtoIds.length === 0)"
+            :disabled="!relatorioGeral && servicoIds.length === 0 && produtoIds.length === 0"
             rounded="xl"
             elevation="2"
           >
@@ -119,118 +130,87 @@
         </v-col>
       </v-row>
 
-      <!-- RESULTADO DO RELATÓRIO -->
+      <!-- RESULTADO -->
       <div v-if="resultado && Object.keys(resultado).length">
         <v-divider class="mb-8"></v-divider>
 
-        <!-- Botões de download -->
-        <div class="text-right mb-4 d-flex justify-end gap-4">
-          <v-btn color="light-blue" @click="baixarComoImagem" rounded="xl">
-            <v-icon left>mdi-image</v-icon>
-            PNG
-          </v-btn>
-          <v-btn color="purple-lighten-4" @click="baixarPDF" class="text-white" rounded="xl">
-            <v-icon left>mdi-file-pdf-box</v-icon>
-            PDF
+        <div class="text-right mb-4">
+          <v-btn color="purple-lighten-4" @click="exportarPDF" class="text-white" rounded="xl">
+            <v-icon left>mdi-file-pdf-box</v-icon> PDF
           </v-btn>
         </div>
 
-        <!-- Conteúdo capturável -->
         <div ref="relatorioRef" class="pa-4 bg-white rounded-xl">
-          <!-- RESUMO -->
+          <!-- Resumo do Período -->
           <v-sheet color="blue-grey-lighten-5" class="pa-6 mb-6" rounded="xl" elevation="1">
             <h3 class="text-subtitle-1 font-weight-bold mb-2">
               <v-icon left class="mr-2">mdi-calendar</v-icon>
               Resumo do Período
             </h3>
-            <p class="text-body-2">
-              Este resumo apresenta o intervalo de tempo selecionado para o relatório atual.
-            </p>
             <p class="text-body-2 mt-2">
               <strong>De:</strong> {{ formatarData(resultado.dataInicio) }} <br>
               <strong>Até:</strong> {{ formatarData(resultado.dataFim) }}
             </p>
           </v-sheet>
 
-          <!-- DETALHES POR SERVIÇO -->
-          <div class="mb-6" v-if="resultado.detalhesServicos && resultado.detalhesServicos.length">
-            <h3 class="text-subtitle-1 font-weight-bold mb-2">Desempenho por Serviço</h3>
-            <p class="text-body-2 text-blue-grey mb-4">
-              Veja o desempenho individual de cada serviço prestado no período selecionado.
-            </p>
+          <!-- Serviços -->
+          <v-sheet v-if="resultado.detalhesServicos?.length" class="pa-6 mb-6" color="indigo-lighten-5" rounded="xl" elevation="1">
+            <h3 class="text-subtitle-1 font-weight-bold mb-4">Serviços</h3>
+            <v-table density="compact">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Quantidade</th>
+                  <th>Total (Kz)</th>
+                  <th>Média (Kz)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="s in resultado.detalhesServicos" :key="s.id">
+                  <td>{{ s.nome }}</td>
+                  <td>{{ s.quantidade }}</td>
+                  <td>{{ formatarKz(s.total) }}</td>
+                  <td>{{ formatarKz(s.media) }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+          </v-sheet>
 
-            <v-row dense>
-              <v-col v-for="servico in resultado.detalhesServicos" :key="'servico-' + servico.id" cols="12" md="6">
-                <v-card class="pa-4 mb-4" elevation="3" rounded="xl">
-                  <div class="d-flex justify-space-between align-center mb-3">
-                    <h4 class="text-subtitle-1 font-weight-medium">{{ servico.nome }}</h4>
-                    <v-icon color="light-blue">mdi-scissors-cutting</v-icon>
-                  </div>
-                  <v-divider class="mb-3"></v-divider>
-                  <p><strong>Total:</strong> {{ formatarKz(servico.total) }}</p>
-                  <p><strong>Quantidade:</strong> {{ servico.quantidade }} {{ servico.quantidade === 1 ? 'vez' : 'vezes' }}</p>
-                  <p><strong>Média:</strong> {{ formatarKz(servico.media) }}</p>
-                </v-card>
-              </v-col>
-            </v-row>
-          </div>
+          <!-- Produtos -->
+          <v-sheet v-if="resultado.detalhesProdutos?.length" class="pa-6 mb-6" color="deep-purple-lighten-5" rounded="xl" elevation="1">
+            <h3 class="text-subtitle-1 font-weight-bold mb-4">Produtos</h3>
+            <v-table density="compact">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Quantidade</th>
+                  <th>Total (Kz)</th>
+                  <th>Média (Kz)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in resultado.detalhesProdutos" :key="p.id">
+                  <td>{{ p.nome }}</td>
+                  <td>{{ p.quantidade }}</td>
+                  <td>{{ formatarKz(p.total) }}</td>
+                  <td>{{ formatarKz(p.media) }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+          </v-sheet>
 
-          <!-- DETALHES POR PRODUTO -->
-          <div class="mb-6" v-if="resultado.detalhesProdutos && resultado.detalhesProdutos.length">
-            <h3 class="text-subtitle-1 font-weight-bold mb-2">Desempenho por Produto</h3>
-            <p class="text-body-2 text-blue-grey mb-4">
-              Veja o desempenho individual de cada produto vendido no período selecionado.
-            </p>
-
-            <v-row dense>
-              <v-col v-for="produto in resultado.detalhesProdutos" :key="'produto-' + produto.id" cols="12" md="6">
-                <v-card class="pa-4 mb-4" elevation="3" rounded="xl">
-                  <div class="d-flex justify-space-between align-center mb-3">
-                    <h4 class="text-subtitle-1 font-weight-medium">{{ produto.nome }}</h4>
-                    <v-icon color="purple-lighten-4">mdi-cube</v-icon>
-                  </div>
-                  <v-divider class="mb-3"></v-divider>
-                  <p><strong>Total:</strong> {{ formatarKz(produto.total) }}</p>
-                  <p><strong>Quantidade:</strong> {{ produto.quantidade }} {{ produto.quantidade === 1 ? 'unidade' : 'unidades' }}</p>
-                  <p><strong>Média:</strong> {{ formatarKz(produto.media) }}</p>
-                </v-card>
-              </v-col>
-            </v-row>
-          </div>
-
-          <!-- TOTAIS -->
-          <div class="mt-8">
-            <h3 class="text-subtitle-1 font-weight-bold mb-2">Totais e Saldo</h3>
-            <p class="text-body-2 text-blue-grey mb-4">
-              Esta seção mostra o valor total vendido, número de serviços e produtos realizados e, se escolhido, os custos com despesas.
-            </p>
-          </div>
-          <v-row>
+          <!-- Totais e Saldo -->
+          <v-row class="mt-8">
             <v-col cols="12" md="6">
-              <v-alert
-                type="success"
-                variant="tonal"
-                rounded="xl"
-                border="start"
-                border-color="green"
-                class="text-body-2"
-              >
+              <v-alert type="success" variant="tonal" rounded="xl" border="start" border-color="green">
                 <v-icon class="mr-2">mdi-cash-multiple</v-icon>
                 <strong>Total vendido:</strong> {{ formatarKz(resultado.totalVendido) }}<br />
-                <strong>Total de serviços vendidos:</strong> {{ resultado.totalServicosVendidos }}<br />
-                <strong>Total de produtos vendidos:</strong> {{ resultado.totalProdutosVendidos || 0 }}
+                <strong>Total serviços (Kz):</strong> {{ formatarKz(resultado.totalServicosVendidos) }}<br />
+                <strong>Total produtos (Kz):</strong> {{ formatarKz(resultado.totalProdutosVendidos) }}
               </v-alert>
             </v-col>
-
             <v-col cols="12" md="6" v-if="incluirDespesas">
-              <v-alert
-                type="info"
-                variant="tonal"
-                rounded="xl"
-                border="start"
-                border-color="blue"
-                class="text-body-2"
-              >
+              <v-alert type="info" variant="tonal" rounded="xl" border="start" border-color="blue">
                 <v-icon class="mr-2">mdi-cash-refund</v-icon>
                 <strong>Total despesas:</strong> {{ formatarKz(resultado.totalDespesas) }}<br />
                 <strong>Saldo:</strong> {{ formatarKz(resultado.saldo) }}
@@ -240,7 +220,6 @@
         </div>
       </div>
 
-      <!-- SEM RESULTADOS -->
       <v-alert
         v-else-if="resultado !== null"
         type="warning"
@@ -259,135 +238,140 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import html2canvas from 'html2canvas'
-import html2pdf from 'html2pdf.js'
+import dayjs from 'dayjs'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
-const periodos = ['dia', 'semana', 'mes', 'trimestre', 'ano']
-const periodo = ref('')
+const periodoSelecionado = ref('Hoje')
+const periodos = ['Hoje', 'Semana', 'Mês', 'Trimestre', 'Semestre', 'Ano']
+
 const servicoIds = ref<number[]>([])
 const produtoIds = ref<number[]>([])
 const incluirDespesas = ref(true)
+const relatorioGeral = ref(false)
+
 const servicos = ref<any[]>([])
 const produtos = ref<any[]>([])
-const resultado = ref<null | {
-  detalhesServicos: {
-    id: number,
-    nome: string,
-    total: number,
-    quantidade: number,
-    media: number
-  }[],
-
-  detalhesProdutos: {
-    id: number,
-    nome: string,
-    total: number,
-    quantidade: number,
-    media: number
-  }[],
-
-  totalVendido: number,
-  totalDespesas: number,
-  saldo: number,
-  totalServicosVendidos: number,
-  totalProdutosVendidos: number,
-  dataInicio: string,
-  dataFim: string
-}>(null)
-
-const relatorioRef = ref<HTMLElement | null>(null)
+const resultado = ref<null | any>(null)
+const totalGeral = ref(0)
 
 onMounted(async () => {
-  const resServicos = await axios.get('/todos-servicos')
-  servicos.value = resServicos.data
-
-  const resProdutos = await axios.get('/todos-produtos')
-  produtos.value = resProdutos.data
+  servicos.value = (await axios.get('/todos-servicos')).data
+  produtos.value = (await axios.get('/todos-produtos')).data
 })
 
 const selecionarTodosServicos = () => {
   servicoIds.value = servicos.value.map(s => s.id)
 }
-
 const selecionarTodosProdutos = () => {
   produtoIds.value = produtos.value.map(p => p.id)
 }
 
+function calcularPeriodo() {
+  const agora = dayjs()
+  let inicio
+  const fim = agora.endOf('day')
+
+  switch (periodoSelecionado.value) {
+    case 'Hoje':
+      inicio = agora.startOf('day')
+      break
+    case 'Semana':
+      inicio = agora.subtract(6, 'day').startOf('day') // últimos 7 dias
+      break
+    case 'Mês':
+      inicio = agora.subtract(1, 'month').startOf('day') // últimos 30 dias
+      break
+    case 'Trimestre':
+      inicio = agora.subtract(3, 'month').startOf('day') // últimos 3 meses
+      break
+    case 'Semestre':
+      inicio = agora.subtract(6, 'month').startOf('day') // últimos 6 meses
+      break
+    case 'Ano':
+      inicio = agora.startOf('year')
+      break
+    default:
+      inicio = agora.startOf('month')
+  }
+
+  return {
+    startDate: inicio.format('YYYY-MM-DD'),
+    endDate: fim.format('YYYY-MM-DD')
+  }
+}
+
 const gerarRelatorio = async () => {
+  const { startDate, endDate } = calcularPeriodo()
   try {
+    const params: any = {
+      startDate,
+      endDate,
+      incluirDespesas: incluirDespesas.value
+    }
+    if (relatorioGeral.value) {
+      params.geral = true
+    } else {
+      params.servicoIds = servicoIds.value
+      params.produtoIds = produtoIds.value
+    }
+
     const res = await axios.get('/relatorio-servico', {
-      params: {
-        servicoIds: servicoIds.value,
-        produtoIds: produtoIds.value,
-        periodo: periodo.value,
-        incluirDespesas: incluirDespesas.value
-      },
-      paramsSerializer: params => {
-        const query = new URLSearchParams()
-        query.append('periodo', params.periodo)
-        params.servicoIds.forEach((id: number) => {
-          query.append('servicoIds', id.toString())
-        })
-        params.produtoIds.forEach((id: number) => {
-          query.append('produtoIds', id.toString())
-        })
-        if (params.incluirDespesas !== undefined) {
-          query.append('incluirDespesas', params.incluirDespesas.toString())
-        }
-        return query.toString()
+      params,
+      paramsSerializer: p => {
+        const q = new URLSearchParams()
+        q.append('startDate', p.startDate)
+        q.append('endDate', p.endDate)
+        q.append('incluirDespesas', p.incluirDespesas.toString())
+        if (p.geral) q.append('geral', 'true')
+        p.servicoIds?.forEach((id: number) => q.append('servicoIds', id.toString()))
+        p.produtoIds?.forEach((id: number) => q.append('produtoIds', id.toString()))
+        return q.toString()
       }
     })
-
-    if ((!res.data.detalhesServicos?.length && !res.data.detalhesProdutos?.length) && res.data.totalVendido === 0) {
-      resultado.value = {}
-    } else {
-      resultado.value = res.data
-    }
+    resultado.value =
+      (!res.data.detalhesServicos?.length &&
+       !res.data.detalhesProdutos?.length &&
+       res.data.totalVendido === 0)
+        ? {} : res.data
+    totalGeral.value = res.data.totalVendido || 0
   } catch (err) {
     console.error('Erro ao gerar relatório:', err)
     resultado.value = null
   }
 }
 
-const baixarComoImagem = async () => {
-  if (!relatorioRef.value) return
-  const canvas = await html2canvas(relatorioRef.value)
-  canvas.toBlob(blob => {
-    if (!blob) return
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `relatorio-${new Date().toISOString()}.png`
-    link.click()
-    URL.revokeObjectURL(url)
-  })
-}
-
-const baixarPDF = () => {
-  if (!relatorioRef.value) return
-  const opt = {
-    margin:       0.5,
-    filename:     `relatorio-${new Date().toISOString()}.pdf`,
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2 },
-    jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+const exportarPDF = () => {
+  if (!resultado.value) return
+  const doc = new jsPDF()
+  doc.setFontSize(16)
+  doc.text('Relatório de Serviços e Produtos', 14, 18)
+  doc.setFontSize(12)
+  doc.text(`Total: Kz ${totalGeral.value.toFixed(2)}`, 14, 28)
+  doc.text(`Total serviços (Kz): ${resultado.value.totalServicosVendidos || 0}`, 14, 36)
+  doc.text(`Total produtos (Kz): ${resultado.value.totalProdutosVendidos || 0}`, 14, 42)
+  if (incluirDespesas.value) {
+    doc.text(`Despesas: ${resultado.value.totalDespesas || 0}`, 14, 48)
+    doc.text(`Saldo: ${resultado.value.saldo || 0}`, 14, 54)
   }
-  html2pdf().set(opt).from(relatorioRef.value).save()
+  const rows: any[] = []
+  resultado.value.detalhesServicos?.forEach((s: any) =>
+    rows.push(['Serviço', s.nome, s.quantidade, s.total?.toFixed(2) || '0.00', s.media?.toFixed(2) || '0.00'])
+  )
+  resultado.value.detalhesProdutos?.forEach((p: any) =>
+    rows.push(['Produto', p.nome, p.quantidade, p.total?.toFixed(2) || '0.00', p.media?.toFixed(2) || '0.00'])
+  )
+  autoTable(doc, { head: [['Tipo', 'Nome', 'Qtd', 'Total (Kz)', 'Média (Kz)']], body: rows, startY: 60 })
+  doc.save(`relatorio-${new Date().toISOString()}.pdf`)
 }
 
-const formatarKz = (valor: number) => {
-  return valor.toLocaleString('pt-AO', { style: 'currency', currency: 'AOA' })
-}
+const formatarKz = (valor: number | null | undefined) =>
+  typeof valor === 'number'
+    ? valor.toLocaleString('pt-AO', { style: 'currency', currency: 'AOA' })
+    : 'Kz 0,00'
 
-const formatarData = (data: string) => {
-  return new Date(data).toLocaleDateString('pt-AO', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric'
-  })
-}
+const formatarData = (data: string | null | undefined) =>
+  data
+    ? new Date(data).toLocaleDateString('pt-AO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : ''
 </script>
-
-<style scoped>
-/* Estilos adicionais */
-</style>

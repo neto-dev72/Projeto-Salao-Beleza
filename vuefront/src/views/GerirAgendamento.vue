@@ -69,6 +69,16 @@
             >
               Extraír Recibo
             </v-btn>
+
+            <!-- Botão para deletar -->
+            <v-btn
+              size="small"
+              color="red"
+              @click="deletarAgendamento(item.id)"
+              title="Eliminar Agendamento"
+            >
+              <v-icon>mdi-delete</v-icon>
+            </v-btn>
           </template>
         </v-data-table>
       </v-col>
@@ -101,7 +111,6 @@
         </v-card-title>
         <v-card-text>
           <div ref="reciboRef" style="background: white; padding: 20px;">
-            <!-- Passa todo o objeto reciboDados para o componente -->
             <ReciboVenda v-if="reciboDados" :dados="reciboDados" />
           </div>
         </v-card-text>
@@ -153,10 +162,7 @@ const agendamentoSelecionado = ref<Agendamento | null>(null)
 const modalRef = ref()
 
 const reciboDialogAberto = ref(false)
-
-// Aqui reciboDados é um objeto com os dados completos do recibo, incluindo o salão
 const reciboDados = ref<any>(null)
-
 const reciboRef = ref<HTMLElement | null>(null)
 
 const headers = [
@@ -171,9 +177,7 @@ const agendamentosFiltrados = computed(() => {
   let resultados = agendamentos.value
 
   if (filtroData.value) {
-    resultados = resultados.filter(a =>
-      a.dataHora.startsWith(filtroData.value)
-    )
+    resultados = resultados.filter(a => a.dataHora.startsWith(filtroData.value))
   }
 
   if (filtroNome.value) {
@@ -197,9 +201,7 @@ function formatarData(dataISO: string): string {
 async function carregarAgendamentos() {
   carregando.value = true
   try {
-    const url = filtroData.value
-      ? `/agendamentos?data=${filtroData.value}`
-      : `/agendamentos`
+    const url = filtroData.value ? `/agendamentos?data=${filtroData.value}` : `/agendamentos`
     const res = await axios.get(url)
     agendamentos.value = res.data
   } catch (err) {
@@ -216,7 +218,6 @@ function verFicha(agendamento: Agendamento) {
 
 async function finalizarAgendamento(agendamento: Agendamento) {
   if (!confirm('Deseja realmente finalizar este agendamento?')) return
-
   try {
     await axios.post(`/agendamentos/${agendamento.id}/finalizar`)
     await carregarAgendamentos()
@@ -226,10 +227,20 @@ async function finalizarAgendamento(agendamento: Agendamento) {
   }
 }
 
+async function deletarAgendamento(id: number) {
+  if (!confirm('Deseja realmente eliminar este agendamento?')) return
+  try {
+    await axios.delete(`/agendamentos/${id}`)
+    await carregarAgendamentos()
+  } catch (err) {
+    console.error('Erro ao eliminar agendamento:', err)
+    alert('Erro ao eliminar o agendamento.')
+  }
+}
+
 async function verRecibo(agendamento: Agendamento) {
   try {
     const res = await axios.get(`/agendamentos/${agendamento.id}/recibo`)
-    // Certifique-se que o backend retorna aqui os dados completos incluindo "salao"
     reciboDados.value = res.data
     reciboDialogAberto.value = true
     await nextTick()
@@ -249,7 +260,6 @@ async function baixarFichaPNG() {
   await new Promise(resolve => setTimeout(resolve, 300))
   const el = modalRef.value?.fichaRef
   if (!el) return console.warn('Ficha não carregada')
-
   const canvas = await html2canvas(el, { backgroundColor: '#fff' })
   const link = document.createElement('a')
   link.href = canvas.toDataURL('image/png')
@@ -262,7 +272,6 @@ async function baixarFichaPDF() {
   await new Promise(resolve => setTimeout(resolve, 300))
   const el = modalRef.value?.fichaRef
   if (!el) return console.warn('Ficha não carregada')
-
   const canvas = await html2canvas(el, { backgroundColor: '#fff' })
   const imgData = canvas.toDataURL('image/png')
   const pdf = new jsPDF('p', 'mm', 'a4')
@@ -276,7 +285,6 @@ async function baixarFichaPDF() {
 async function baixarReciboPNG() {
   await nextTick()
   if (!reciboRef.value) return
-
   const canvas = await html2canvas(reciboRef.value, { backgroundColor: '#fff' })
   const link = document.createElement('a')
   link.href = canvas.toDataURL('image/png')
@@ -287,7 +295,6 @@ async function baixarReciboPNG() {
 async function baixarReciboPDF() {
   await nextTick()
   if (!reciboRef.value) return
-
   const canvas = await html2canvas(reciboRef.value, { backgroundColor: '#fff' })
   const imgData = canvas.toDataURL('image/png')
   const pdf = new jsPDF('p', 'mm', 'a4')
