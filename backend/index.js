@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 9000;
 
 app.use(cors({
   origin: [
-    'http://31.97.115.4:8080', // IP da VPS onde o frontend vai rodar
+    'http://168.231.112.34:8080', // IP da VPS onde o frontend vai rodar
   ],
   credentials: true
 }));
