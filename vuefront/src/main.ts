@@ -10,8 +10,8 @@ loadFonts()
 // ✅ 2. Configura o Axios antes de montar a aplicação
 import axios from 'axios'
 
+axios.defaults.baseURL = 'http://31.97.115.4:9000';
 
-axios.defaults.baseURL = 'http://168.231.112.34:9000'; // IP da VPS
 
 // ✅ Intercepta todas as requisições para enviar o token JWT
 axios.interceptors.request.use(config => {
